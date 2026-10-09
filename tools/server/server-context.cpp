@@ -3659,11 +3659,26 @@ private:
             has_output |= batch.tokens[i].output;
         }
 
+        bool gemma4_recur_is_decode = false;
+        if (params_base.gemma4_recur > 0) {
+            const bool is_prompt = batch.tokens[off].is_prompt;
+            for (int i = off + 1; i < off + batch_view.n_tokens; ++i) {
+                if (batch.tokens[i].is_prompt != is_prompt) {
+                    throw std::runtime_error("gemma4_recur does not support prompt and generation tokens in one batch");
+                }
+            }
+            gemma4_recur_is_decode = !is_prompt;
+            SRV_DBG("gemma4_recur input role = %s, n_tokens = %d\n",
+                    gemma4_recur_is_decode ? "decode" : "prompt", batch_view.n_tokens);
+        }
+
         // yield to the queue, so we can still handle metrics tasks while decoding
         // note: the sync is done here too, so that the wait is also covered by the yield
         int ret = 0;
         queue_tasks.yield_to_queue([&]() {
-            ret = llama_decode(ctx_tgt, batch_view);
+            ret = params_base.gemma4_recur > 0
+                    ? llama_decode_with_gemma4_recur_role(ctx_tgt, batch_view, gemma4_recur_is_decode)
+                    : llama_decode(ctx_tgt, batch_view);
             if (ret == 0 && has_output) {
                 llama_synchronize(ctx_tgt);
             }

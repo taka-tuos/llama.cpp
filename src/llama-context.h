@@ -138,10 +138,11 @@ struct llama_context {
                 const llama_ubatch & ubatch,
                     llm_graph_type   gtype,
             llama_memory_context_i * mctx,
-                       ggml_status & ret);
+                       ggml_status & ret,
+                              bool   gemma4_recur_is_decode = false);
 
     int encode(const llama_batch & batch_inp);
-    int decode(const llama_batch & batch_inp);
+    int decode(const llama_batch & batch_inp, bool gemma4_recur_is_decode = false);
 
     //
     // state save/load
@@ -258,7 +259,8 @@ private:
                         llm_graph_result * res,
                       const llama_ubatch & ubatch,
             const llama_memory_context_i * mctx,
-                          llm_graph_type   gtype) const;
+                          llm_graph_type   gtype,
+                                  bool     gemma4_recur_is_decode = false) const;
 
     llm_graph_cb graph_get_cb() const;
 

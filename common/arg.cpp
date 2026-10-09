@@ -23,6 +23,7 @@
 #endif
 
 #include <algorithm>
+#include <charconv>
 #include <cinttypes>
 #include <climits>
 #include <cmath>
@@ -1648,6 +1649,79 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
             }
         }
     ).set_env("LLAMA_ARG_CTX_SIZE"));
+    add_opt(common_arg(
+        {"--gemma4-recur"}, "N",
+        "extra Gemma 4 E4B passes (prelude-input: 0..32; output: 0..4; legacy: 0..3; default: 0)",
+        [](common_params & params, const std::string & value) {
+            int32_t recur = 0;
+            const auto result = std::from_chars(value.data(), value.data() + value.size(), recur);
+            if (result.ec != std::errc{} || result.ptr != value.data() + value.size() ||
+                    (recur < 0 || recur > 32)) {
+                throw std::invalid_argument("expected integer in [0, 32]");
+            }
+            params.gemma4_recur = recur;
+        }
+    ).set_env("LLAMA_ARG_GEMMA4_RECUR").set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}));
+    add_opt(common_arg(
+        {"--gemma4-recur-beta"}, "B",
+        "Gemma 4 E4B extra output mixing strength (0..1; default: 1)",
+        [](common_params & params, const std::string & value) {
+            double beta = 0.0;
+            const auto result = std::from_chars(value.data(), value.data() + value.size(), beta);
+            if (result.ec != std::errc{} || result.ptr != value.data() + value.size() ||
+                    !std::isfinite(beta) || beta < 0.0 || beta > 1.0) {
+                throw std::invalid_argument("expected a finite real number in [0, 1]");
+            }
+            params.gemma4_recur_beta = static_cast<float>(beta);
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}));
+    add_opt(common_arg(
+        {"--gemma4-recur-mode"}, "MODE",
+        "Gemma 4 E4B recurrence mode: output, prelude-input (linear-v1), prelude-input-legacy (ratio-v1); default output",
+        [](common_params & params, const std::string & value) {
+            if (value == "output") {
+                params.gemma4_recur_mode = 0;
+            } else if (value == "prelude-input") {
+                params.gemma4_recur_mode = 2;
+            } else if (value == "prelude-input-legacy") {
+                params.gemma4_recur_mode = 1;
+            } else {
+                throw std::invalid_argument("expected output or prelude-input");
+            }
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}));
+    add_opt(common_arg(
+        {"--gemma4-recur-m"}, "M", "Gemma 4 E4B update denominator (positive int32; default: 1)",
+        [](common_params & params, const std::string & value) {
+            int32_t m = 0;
+            const auto result = std::from_chars(value.data(), value.data() + value.size(), m);
+            if (result.ec != std::errc{} || result.ptr != value.data() + value.size() || m < 1) {
+                throw std::invalid_argument("expected a positive int32 denominator");
+            }
+            params.gemma4_recur_m = m;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}));
+    add_opt(common_arg(
+        {"--gemma4-recur-scope"}, "SCOPE", "Gemma 4 E4B scope: none or decode (default: decode); prefill/both unsupported in S8",
+        [](common_params & params, const std::string & value) {
+            if (value == "none") params.gemma4_recur_scope = 0;
+            else if (value == "decode") params.gemma4_recur_scope = 1;
+            else throw std::invalid_argument("S8 supports scope none or decode only");
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}));
+    add_opt(common_arg(
+        {"--gemma4-recur-alpha"}, "A",
+        "Gemma 4 E4B prelude input mixing strength (0..1; default: 0)",
+        [](common_params & params, const std::string & value) {
+            double alpha = 0.0;
+            const auto result = std::from_chars(value.data(), value.data() + value.size(), alpha);
+            if (result.ec != std::errc{} || result.ptr != value.data() + value.size() ||
+                    !std::isfinite(alpha) || alpha < 0.0 || alpha > 1.0) {
+                throw std::invalid_argument("expected a finite real number in [0, 1]");
+            }
+            params.gemma4_recur_alpha = static_cast<float>(alpha);
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_CLI}));
     add_opt(common_arg(
         { "--kv-unified-per-slot" }, "N",
         "context limit per parallel slot (default: unset, behavior unchanged).\n"

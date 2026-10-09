@@ -150,8 +150,8 @@ static ggml_tensor * ggml_view_2d_slice(ggml_context * ctx0, ggml_tensor * x, in
 llama_model_gemma4::graph::graph(const llama_model & model, const llm_graph_params & params) :
         llm_graph_context(params),
         model(model),
-        n_embd_per_layer(model.hparams.n_embd_per_layer) {
-    ggml_tensor * cur;
+        n_embd_per_layer(model.hparams.n_embd_per_layer),
+        gemma4_recur_is_decode(params.gemma4_recur_is_decode) {
     ggml_tensor * inpL;
 
     inpL = build_inp_embd(model.tok_embd);
@@ -177,7 +177,18 @@ llama_model_gemma4::graph::graph(const llama_model & model, const llm_graph_para
         inp_per_layer = project_per_layer_inputs(inpL, inp_per_layer);
     }
 
-    for (int il = 0; il < n_layer; ++il) {
+    auto build_layer = [&](int il, ggml_tensor * layer_input, int recur_pass) {
+        ggml_tensor * cur = nullptr;
+        ggml_tensor * inp_layer = layer_input;
+        const bool is_recur_pass = recur_pass > 0;
+
+        auto layer_cb = [&](ggml_tensor * tensor, const char * name, int callback_layer) {
+            cb(tensor, name, callback_layer);
+            if (is_recur_pass) {
+                ggml_format_name(tensor, "recur%d_%s-%d", recur_pass, name, il);
+            }
+        };
+
         const int64_t n_embd_head = hparams.n_embd_head_k(il);
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_v(il));
 
@@ -188,11 +199,18 @@ llama_model_gemma4::graph::graph(const llama_model & model, const llm_graph_para
         const float freq_scale_l = model.get_rope_freq_scale(cparams, il);
         const int   n_rot_l      = hparams.n_rot(il);
 
-        res->t_layer_inp[il] = inpL;
+        if (!is_recur_pass) {
+            res->t_layer_inp[il] = inp_layer;
+        }
+
+        if (cparams.gemma4_recur > 0 && il >= 18 && il <= 23) {
+            LLAMA_LOG_DEBUG("%s: gemma4_recur layer=%d pass=%d kv=%s ple=%s\n", __func__, il, recur_pass,
+                    is_recur_pass ? "read-only" : "write", is_recur_pass ? "skip" : "normal");
+        }
 
         // norm
-        cur = build_norm(inpL, model.layers[il].attn_norm, nullptr, LLM_NORM_RMS, il);
-        cb(cur, "attn_norm", il);
+        cur = build_norm(inp_layer, model.layers[il].attn_norm, nullptr, LLM_NORM_RMS, il);
+        layer_cb(cur, "attn_norm", il);
 
         ggml_tensor * freq_factors = nullptr;
         if (!hparams.is_swa(il)) {
@@ -205,27 +223,27 @@ llama_model_gemma4::graph::graph(const llama_model & model, const llm_graph_para
         ggml_tensor * Qcur;
         {
             Qcur = build_lora_mm(model.layers[il].wq, cur, model.layers[il].wq_s);
-            cb(Qcur, "Qcur", il);
+            layer_cb(Qcur, "Qcur", il);
 
             Qcur = ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens);
 
             Qcur = build_norm(Qcur, model.layers[il].attn_q_norm, nullptr, LLM_NORM_RMS, il);
-            cb(Qcur, "Qcur_normed", il);
+            layer_cb(Qcur, "Qcur_normed", il);
 
             Qcur = ggml_rope_ext(ctx0, Qcur, inp_pos, freq_factors, n_rot_l, rope_type, n_ctx_orig, freq_base_l, freq_scale_l,
                                  ext_factor, attn_factor, beta_fast, beta_slow);
-            cb(Qcur, "Qcur_pos", il);
+            layer_cb(Qcur, "Qcur_pos", il);
         }
 
         // self-attention
-        if (hparams.has_kv(il)) {
+        if (hparams.has_kv(il) && !is_recur_pass) {
             ggml_tensor * Kcur = build_lora_mm(model.layers[il].wk, cur, model.layers[il].wk_s);
-            cb(Kcur, "Kcur", il);
+            layer_cb(Kcur, "Kcur", il);
 
             ggml_tensor * Vcur = model.layers[il].wv
                                     ? build_lora_mm(model.layers[il].wv, cur, model.layers[il].wv_s)
                                     : Kcur; // if v_proj is not present, use Kcur as Vcur
-            cb(Vcur, "Vcur", il);
+            layer_cb(Vcur, "Vcur", il);
 
             Kcur = ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens);
             Vcur = ggml_reshape_3d(ctx0, Vcur, n_embd_head, n_head_kv, n_tokens);
@@ -233,19 +251,19 @@ llama_model_gemma4::graph::graph(const llama_model & model, const llm_graph_para
             Kcur = build_norm(Kcur, model.layers[il].attn_k_norm, nullptr, LLM_NORM_RMS, il);
             Vcur = ggml_rms_norm(ctx0, Vcur, hparams.f_norm_rms_eps);
 
-            cb(Kcur, "Kcur_normed", il);
-            cb(Vcur, "Vcur_normed", il);
+            layer_cb(Kcur, "Kcur_normed", il);
+            layer_cb(Vcur, "Vcur_normed", il);
 
             Kcur = ggml_rope_ext(ctx0, Kcur, inp_pos, freq_factors, n_rot_l, rope_type, n_ctx_orig, freq_base_l, freq_scale_l,
                                  ext_factor, attn_factor, beta_fast, beta_slow);
 
-            cb(Kcur, "Kcur_pos", il);
+            layer_cb(Kcur, "Kcur_pos", il);
 
             cur = build_attn(inp_attn, model.layers[il].wo,
                     nullptr, model.layers[il].wo_s, Qcur, Kcur, Vcur, nullptr, nullptr, nullptr,
                     hparams.f_attention_scale, il);
         } else {
-            // reuse KV cache of earlier layers
+            // read the layer's existing KV cache without writing K/V
             cur = build_attn(inp_attn,
                     model.layers[il].wo, nullptr, model.layers[il].wo_s,
                     Qcur, nullptr, nullptr, nullptr, nullptr, nullptr, hparams.f_attention_scale, il);
@@ -255,15 +273,15 @@ llama_model_gemma4::graph::graph(const llama_model & model, const llm_graph_para
         // keep all rows when extracting unmasked nextn embeddings (MTP target needs the hidden state for every token)
         if (il == n_layer - 1 && inp_out_ids && cparams.embeddings_nextn_masked) {
             cur  = ggml_get_rows(ctx0,  cur, inp_out_ids);
-            inpL = ggml_get_rows(ctx0, inpL, inp_out_ids);
+            inp_layer = ggml_get_rows(ctx0, inp_layer, inp_out_ids);
         }
         cur = build_norm(cur,
                 model.layers[il].attn_post_norm, nullptr,
                 LLM_NORM_RMS, il);
-        cb(cur, "attn_post_norm", il);
+        layer_cb(cur, "attn_post_norm", il);
 
-        ggml_tensor * attn_out = ggml_add(ctx0, cur, inpL);
-        cb(attn_out, "attn_out", il);
+        ggml_tensor * attn_out = ggml_add(ctx0, cur, inp_layer);
+        layer_cb(attn_out, "attn_out", il);
 
         // feed-forward network
         const bool is_moe_layer = model.layers[il].ffn_gate_inp != nullptr;
@@ -272,7 +290,7 @@ llama_model_gemma4::graph::graph(const llama_model & model, const llm_graph_para
             ggml_tensor * cur_mlp = build_norm(attn_out,
                     model.layers[il].ffn_norm, nullptr,
                     LLM_NORM_RMS, il);
-            cb(cur_mlp, "ffn_norm_1", il);
+            layer_cb(cur_mlp, "ffn_norm_1", il);
 
             cur_mlp = build_ffn(cur_mlp,
                     model.layers[il].ffn_up,   nullptr, model.layers[il].ffn_up_s,
@@ -283,20 +301,20 @@ llama_model_gemma4::graph::graph(const llama_model & model, const llm_graph_para
             cur_mlp = build_norm(cur_mlp,
                     model.layers[il].ffn_post_norm_1, nullptr,
                     LLM_NORM_RMS, il);
-            cb(cur_mlp, "ffn_mlp", il);
+            layer_cb(cur_mlp, "ffn_mlp", il);
 
             // Expert FFN
             ggml_tensor * cur_moe = build_norm(attn_out,
                     model.layers[il].ffn_pre_norm_2, nullptr,
                     LLM_NORM_RMS, il);
-            cb(cur_moe, "ffn_norm_2", il);
+            layer_cb(cur_moe, "ffn_norm_2", il);
 
             // custom MoE logits calculation (router operates on attn_out, not cur)
             ggml_tensor * tmp = ggml_rms_norm(ctx0, attn_out, hparams.f_norm_rms_eps);
             tmp = ggml_scale(ctx0, tmp, 1.0f / sqrtf((float) n_embd));
             tmp = ggml_mul(ctx0, tmp, model.layers[il].ffn_gate_inp_s);
             ggml_tensor * logits = build_lora_mm(model.layers[il].ffn_gate_inp, tmp); // [n_expert, n_tokens]
-            cb(logits, "ffn_moe_logits", il);
+            layer_cb(logits, "ffn_moe_logits", il);
 
             cur_moe = build_moe_ffn(cur_moe,
                     nullptr, // gate_inp
@@ -316,15 +334,15 @@ llama_model_gemma4::graph::graph(const llama_model & model, const llm_graph_para
             cur_moe = build_norm(cur_moe,
                     model.layers[il].ffn_post_norm_2, nullptr,
                     LLM_NORM_RMS, il);
-            cb(cur_moe, "ffn_moe", il);
+            layer_cb(cur_moe, "ffn_moe", il);
 
             cur = ggml_add(ctx0, cur_mlp, cur_moe);
-            cb(cur, "ffn_moe_combined", il);
+            layer_cb(cur, "ffn_moe_combined", il);
         } else {
             cur = build_norm(attn_out,
                     model.layers[il].ffn_norm, nullptr,
                     LLM_NORM_RMS, il);
-            cb(cur, "ffn_norm", il);
+            layer_cb(cur, "ffn_norm", il);
 
             cur = build_ffn(cur,
                     model.layers[il].ffn_up,   nullptr, model.layers[il].ffn_up_s,
@@ -332,20 +350,20 @@ llama_model_gemma4::graph::graph(const llama_model & model, const llm_graph_para
                     model.layers[il].ffn_down, nullptr, model.layers[il].ffn_down_s,
                     nullptr,
                     LLM_FFN_GELU, LLM_FFN_PAR, il);
-            cb(cur, "ffn_out", il);
+            layer_cb(cur, "ffn_out", il);
         }
         cur = build_norm(cur,
                 model.layers[il].ffn_post_norm, nullptr,
                 LLM_NORM_RMS, -1);
-        cb(cur, "ffn_post_norm", il);
+        layer_cb(cur, "ffn_post_norm", il);
 
         // residual connection
         cur = ggml_add(ctx0, cur, attn_out);
 
         // per-layer embedding
-        if (inp_per_layer) {
+        if (!is_recur_pass && inp_per_layer) {
             ggml_tensor * pe_in = cur;
-            cb(cur, "pe_in", il);
+            layer_cb(cur, "pe_in", il);
 
             cur = build_lora_mm(model.layers[il].per_layer_inp_gate, cur); // [n_embd_per_layer, n_tokens]
             cur = ggml_gelu(ctx0, cur);
@@ -360,7 +378,7 @@ llama_model_gemma4::graph::graph(const llama_model & model, const llm_graph_para
             cur = ggml_mul(ctx0, cur, inp_this_layer);
             cur = build_lora_mm(model.layers[il].per_layer_proj, cur); // [n_embd, n_tokens]
             cur = build_norm(cur, model.layers[il].per_layer_post_norm, nullptr, LLM_NORM_RMS, il);
-            cb(cur, "per_layer_embd_out", il);
+            layer_cb(cur, "per_layer_embd_out", il);
 
             // residual connection
             cur = ggml_add(ctx0, pe_in, cur);
@@ -369,16 +387,72 @@ llama_model_gemma4::graph::graph(const llama_model & model, const llm_graph_para
         // layer_scalar
         if (model.layers[il].out_scale) {
             cur = ggml_mul(ctx0, cur, model.layers[il].out_scale);
-            cb(cur, "out_scaled", il);
+            layer_cb(cur, "out_scaled", il);
         }
 
         cur = build_cvec(cur, il);
-        cb(cur, "l_out", il);
+        layer_cb(cur, "l_out", il);
 
-        // input for next layer
-        inpL = cur;
+        return cur;
+    };
+
+    ggml_tensor * h_prelude = nullptr;
+    for (int il = 0; il < n_layer; ++il) {
+        inpL = build_layer(il, inpL, 0);
+        if (il == 17) {
+            h_prelude = inpL;
+        }
+
+        if (il == 23 && gemma4_recur_is_decode && cparams.gemma4_recur_scope == 1 && cparams.gemma4_recur > 0 && cparams.gemma4_recur_beta > 0.0f) {
+            ggml_tensor * h_base = inpL;
+            if (cparams.gemma4_recur_mode == 2 && cparams.gemma4_recur_alpha == 1.0f) {
+                ggml_build_forward_expand(gf, h_base);
+            }
+            for (int pass = 1; pass <= cparams.gemma4_recur; ++pass) {
+                if (cparams.gemma4_recur_mode == 1 && cparams.gemma4_recur_alpha > 0.0f) {
+                    GGML_ASSERT(h_prelude != nullptr);
+                    const float alpha = cparams.gemma4_recur_alpha;
+                    const float scale = 1.0f / (1.0f + alpha);
+                    inpL = ggml_add(ctx0, inpL, ggml_scale(ctx0, h_prelude, alpha));
+                    inpL = ggml_scale(ctx0, inpL, scale);
+                    cb(inpL, "recur_input_mixed", 17);
+                }
+                if (cparams.gemma4_recur_mode == 2 && cparams.gemma4_recur_alpha > 0.0f) {
+                    GGML_ASSERT(h_prelude != nullptr);
+                    if (cparams.gemma4_recur_alpha == 1.0f) {
+                        inpL = h_prelude;
+                    } else {
+                        inpL = ggml_add(ctx0, inpL, ggml_scale(ctx0, ggml_sub(ctx0, h_prelude, inpL), cparams.gemma4_recur_alpha));
+                    }
+                    if (cparams.gemma4_recur_alpha != 1.0f) {
+                        cb(inpL, ("recur" + std::to_string(pass) + "_input_mixed").c_str(), 17);
+                    }
+                }
+                ggml_tensor * h_input = inpL;
+                for (int recur_il = 18; recur_il <= 23; ++recur_il) {
+                    inpL = build_layer(recur_il, inpL, pass);
+                }
+                if (cparams.gemma4_recur_mode == 2 && cparams.gemma4_recur_alpha == 1.0f) {
+                    ggml_build_forward_expand(gf, inpL);
+                }
+                if (cparams.gemma4_recur_m != 1) {
+                    const float d = 1.0f / static_cast<float>(cparams.gemma4_recur_m);
+                    inpL = ggml_add(ctx0, h_input, ggml_scale(ctx0, ggml_sub(ctx0, inpL, h_input), d));
+                    cb(inpL, ("recur" + std::to_string(pass) + "_updated").c_str(), 23);
+                    if (cparams.gemma4_recur_mode == 2 && cparams.gemma4_recur_alpha == 1.0f) {
+                        ggml_build_forward_expand(gf, inpL);
+                    }
+                }
+            }
+            if (cparams.gemma4_recur_beta < 1.0f) {
+                inpL = ggml_sub(ctx0, inpL, h_base);
+                inpL = ggml_scale(ctx0, inpL, cparams.gemma4_recur_beta);
+                inpL = ggml_add(ctx0, h_base, inpL);
+                cb(inpL, "recur_mixed", 23);
+            }
+        }
     }
-    cur = inpL;
+    ggml_tensor * cur = inpL;
 
     cur = build_norm(cur,
             model.output_norm, nullptr,

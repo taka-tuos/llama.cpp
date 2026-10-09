@@ -366,6 +366,12 @@ extern "C" {
         uint32_t n_outputs_max_per_seq; // max outputs per sequence (0 = n_outputs_max)
         int32_t  n_threads;             // number of threads to use for generation
         int32_t  n_threads_batch;       // number of threads to use for batch processing
+        int32_t  gemma4_recur;          // extra Gemma 4 E4B passes (linear: 0..32, output: 0..4, legacy: 0..3)
+        float    gemma4_recur_beta;     // output mixing strength (0..1, default 1)
+        int32_t  gemma4_recur_mode;     // 0 = output, 1 = prelude-input-legacy, 2 = prelude-input
+        float    gemma4_recur_alpha;    // prelude input mixing strength (0..1, default 0)
+        int32_t gemma4_recur_m;        // positive update denominator, default 1
+        int32_t gemma4_recur_scope;    // 0 = none, 1 = decode (default)
 
         enum llama_context_type      ctx_type;          // set the context type (e.g. MTP)
         enum llama_rope_scaling_type rope_scaling_type; // RoPE scaling type, from `enum llama_rope_scaling_type`
@@ -990,6 +996,13 @@ extern "C" {
     LLAMA_API int32_t llama_decode(
             struct llama_context * ctx,
               struct llama_batch   batch);
+
+    // Process a batch and declare whether its input contains sampled generation tokens.
+    // Set is_decode to false for all prompt batches, including a one-token final prompt chunk.
+    LLAMA_API int32_t llama_decode_with_gemma4_recur_role(
+            struct llama_context * ctx,
+              struct llama_batch   batch,
+                         bool      is_decode);
 
     // Set the number of threads used for decoding
     // n_threads is the number of threads used for generation (single token)

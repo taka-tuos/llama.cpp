@@ -94,6 +94,12 @@ static std::string media_type_from_ext(const std::string & fname) {
 bool cli_context::init() {
     ui::init(params);
 
+    if (params.gemma4_recur > 0 && !params.server_base.empty()) {
+        ui::show_error("Gemma 4 recurrence requires a local model context",
+                "--gemma4-recur cannot be used with --server-base");
+        return false;
+    }
+
     std::optional<ui::spinner> spinner;
 
     bool use_external_server = !params.server_base.empty();

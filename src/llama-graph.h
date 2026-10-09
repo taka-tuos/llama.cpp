@@ -777,6 +777,7 @@ struct llm_graph_params {
     llama_ubatch ubatch; // note: intentionally make a copy
 
     llm_graph_type gtype;
+    bool gemma4_recur_is_decode = false;
 
     ggml_backend_sched_t sched;
     ggml_backend_t backend_cpu;
@@ -843,6 +844,10 @@ struct llm_graph_params {
             return false;
         }
 
+        if (cparams.gemma4_recur > 0 && gemma4_recur_is_decode != other.gemma4_recur_is_decode) {
+            return false;
+        }
+
         if (n_outputs != other.n_outputs) {
             return false;
         }
@@ -871,6 +876,12 @@ struct llm_graph_params {
         }
 
         return
+            cparams.gemma4_recur          == other.cparams.gemma4_recur          &&
+            cparams.gemma4_recur_beta     == other.cparams.gemma4_recur_beta     &&
+            cparams.gemma4_recur_mode     == other.cparams.gemma4_recur_mode     &&
+            cparams.gemma4_recur_alpha    == other.cparams.gemma4_recur_alpha    &&
+            cparams.gemma4_recur_m        == other.cparams.gemma4_recur_m        &&
+            cparams.gemma4_recur_scope    == other.cparams.gemma4_recur_scope    &&
             cparams.embeddings              == other.cparams.embeddings              &&
             cparams.embeddings_nextn        == other.cparams.embeddings_nextn        &&
             cparams.embeddings_nextn_masked == other.cparams.embeddings_nextn_masked &&

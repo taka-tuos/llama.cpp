@@ -101,6 +101,51 @@ llama_context::llama_context(
         throw std::runtime_error("n_seq_max must be <= " + std::to_string(LLAMA_MAX_SEQ));
     }
 
+    cparams.gemma4_recur_beta = params.gemma4_recur_beta;
+    if (!std::isfinite(cparams.gemma4_recur_beta) || cparams.gemma4_recur_beta < 0.0f || cparams.gemma4_recur_beta > 1.0f) {
+        throw std::runtime_error("gemma4_recur_beta must be finite and in [0, 1]");
+    }
+    if (params.gemma4_recur_mode != 2 && params.gemma4_recur == 4 && cparams.gemma4_recur_beta != 1.0f) {
+        throw std::runtime_error("non-default gemma4_recur_beta requires N=1, 2, or 3 (or N=0)");
+    }
+    cparams.gemma4_recur = params.gemma4_recur;
+    cparams.gemma4_recur_mode = params.gemma4_recur_mode;
+    cparams.gemma4_recur_alpha = params.gemma4_recur_alpha;
+    cparams.gemma4_recur_m = params.gemma4_recur_m;
+    cparams.gemma4_recur_scope = params.gemma4_recur_scope;
+    if (cparams.gemma4_recur_m < 1 || cparams.gemma4_recur_scope < 0 || cparams.gemma4_recur_scope > 1) {
+        throw std::runtime_error("gemma4_recur requires positive M and scope none/decode; prefill/both unsupported in S8");
+    }
+    if ((cparams.gemma4_recur_mode == 1 || (cparams.gemma4_recur_mode == 0 && cparams.gemma4_recur == 4)) && cparams.gemma4_recur_m != 1) {
+        throw std::runtime_error("legacy mode and N=4 require M=1");
+    }
+    if (cparams.gemma4_recur_mode < 0 || cparams.gemma4_recur_mode > 2) {
+        throw std::runtime_error("gemma4_recur_mode must be output or prelude-input");
+    }
+    if (!std::isfinite(cparams.gemma4_recur_alpha) || cparams.gemma4_recur_alpha < 0.0f || cparams.gemma4_recur_alpha > 1.0f) {
+        throw std::runtime_error("gemma4_recur_alpha must be finite and in [0, 1]");
+    }
+    if (cparams.gemma4_recur_mode == 0 && cparams.gemma4_recur_alpha != 0.0f) {
+        throw std::runtime_error("gemma4_recur_alpha requires prelude-input mode");
+    }
+    if (cparams.gemma4_recur_mode == 1 && cparams.gemma4_recur > 3) {
+        throw std::runtime_error("prelude-input-legacy mode supports N=0..3");
+    }
+    if (cparams.gemma4_recur < 0 || cparams.gemma4_recur > (cparams.gemma4_recur_mode == 2 ? 32 : 4)) {
+        throw std::runtime_error("gemma4_recur requires N=0..32 for prelude-input, N=0..4 for output");
+    }
+    if (cparams.gemma4_recur > 0) {
+        const bool is_e4b = model.arch == LLM_ARCH_GEMMA4 && model.type == LLM_TYPE_E4B &&
+                hparams.n_layer_all == 42 && hparams.n_embd == 2560 &&
+                hparams.n_embd_per_layer == 256 && hparams.n_layer_kv_from_start == 24;
+        if (!is_e4b) {
+            throw std::runtime_error("gemma4_recur is supported only for Gemma 4 E4B text models");
+        }
+        if (cparams.n_seq_max != 1) {
+            throw std::runtime_error("gemma4_recur requires a single sequence");
+        }
+    }
+
     cparams.n_rs_seq = params.n_rs_seq;
     if (cparams.n_rs_seq > 0 && !llm_arch_supports_rs_rollback(model.arch)) {
         LLAMA_LOG_DEBUG("%s: n_rs_seq=%u requested but model does not support recurrent partial rollback; clamping to 0\n",
@@ -1331,7 +1376,7 @@ bool llama_context::set_adapter_cvec(
     return res;
 }
 
-llm_graph_result * llama_context::process_ubatch(const llama_ubatch & ubatch, llm_graph_type gtype, llama_memory_context_i * mctx, ggml_status & ret) {
+llm_graph_result * llama_context::process_ubatch(const llama_ubatch & ubatch, llm_graph_type gtype, llama_memory_context_i * mctx, ggml_status & ret, bool gemma4_recur_is_decode) {
     if (mctx && !mctx->apply()) {
         LLAMA_LOG_ERROR("%s: failed to apply memory context\n", __func__);
         ret = GGML_STATUS_FAILED;
@@ -1343,9 +1388,21 @@ llm_graph_result * llama_context::process_ubatch(const llama_ubatch & ubatch, ll
 
     // the new graph parameters
     // in order to correctly reuse a graph, it's full topology has to be uniquely determined by these parameters
-    const auto gparams = graph_params(res, ubatch, mctx, gtype);
+    const auto gparams = graph_params(res, ubatch, mctx, gtype, gemma4_recur_is_decode);
 
-    if (!graph_reuse_disable && res->can_reuse(gparams)) {
+    if (cparams.gemma4_recur > 0) {
+        LLAMA_LOG_DEBUG("%s: gemma4_recur=%d beta=%.9g, role=%s, n_tokens=%u\n", __func__,
+                cparams.gemma4_recur, cparams.gemma4_recur_beta, gemma4_recur_is_decode ? "decode" : "prompt", ubatch.n_tokens);
+    }
+
+    const bool graph_reused = !graph_reuse_disable && res->can_reuse(gparams);
+    if (cparams.gemma4_recur > 0) {
+        LLAMA_LOG_DEBUG("%s: gemma4_recur graph=%s, role=%s, n_tokens=%u\n", __func__,
+                graph_reused ? "reuse" : "rebuild",
+                gemma4_recur_is_decode ? "decode" : "prompt", ubatch.n_tokens);
+    }
+
+    if (graph_reused) {
         //LLAMA_LOG_DEBUG("%s: reusing previous graph\n", __func__);
 
         // with pipeline parallelism, the previous graph_compute_async may still be running
@@ -1396,6 +1453,11 @@ llm_graph_result * llama_context::process_ubatch(const llama_ubatch & ubatch, ll
         LLAMA_LOG_ERROR("%s: failed to compute graph, compute status: %d\n", __func__, status);
         ret = status;
         return nullptr;
+    }
+
+    if (cparams.gemma4_recur > 0 && gemma4_recur_is_decode) {
+        LLAMA_LOG_DEBUG("%s: gemma4_recur completed passes=%d core_layers=18-23 n_tokens=%u\n",
+                __func__, (cparams.gemma4_recur_beta == 0.0f || cparams.gemma4_recur_scope == 0) ? 0 : cparams.gemma4_recur, ubatch.n_tokens);
     }
 
     ret = GGML_STATUS_SUCCESS;
@@ -1641,7 +1703,7 @@ static bool needs_raw_logits(const llama_ubatch & ubatch, const std::map<llama_s
     return false; // all sequences use backend sampling
 }
 
-int llama_context::decode(const llama_batch & batch_inp) {
+int llama_context::decode(const llama_batch & batch_inp, bool gemma4_recur_is_decode) {
     // MTP hook batches carry both token (next-token id) and embd (h_nextn row),
     // so accept either present rather than requiring exactly one.
     GGML_ASSERT(batch_inp.token || batch_inp.embd);
@@ -1824,7 +1886,8 @@ int llama_context::decode(const llama_batch & batch_inp) {
 
         ggml_status status;
 
-        const auto * res = process_ubatch(ubatch, ctx_type_to_graph_type(cparams.ctx_type), mctx.get(), status);
+        const auto * res = process_ubatch(ubatch, ctx_type_to_graph_type(cparams.ctx_type), mctx.get(), status,
+                gemma4_recur_is_decode);
 
         if (!res) {
             // the last ubatch failed or was aborted -> remove all positions of that ubatch from the memory module
@@ -2331,6 +2394,12 @@ uint32_t llama_context::graph_max_nodes(uint32_t n_tokens) const {
         }
     }
 
+    if (model.arch == LLM_ARCH_GEMMA4 && model.type == LLM_TYPE_E4B &&
+            cparams.gemma4_recur_mode == 2 && cparams.gemma4_recur > 3) {
+        // Budget tensor metadata and graph nodes for six extra layers per pass.
+        res += 1024u * static_cast<uint32_t>(cparams.gemma4_recur - 3);
+    }
+
     uint32_t n_sampling_nodes = 0;
     uint32_t n_sampling_nodes_max = 0;
     for (const auto & [seq_id, sampler] : sampling.samplers) {
@@ -2469,13 +2538,15 @@ llm_graph_params llama_context::graph_params(
                         llm_graph_result * res,
                       const llama_ubatch & ubatch,
             const llama_memory_context_i * mctx,
-                          llm_graph_type   gtype) const {
+                          llm_graph_type   gtype,
+                                  bool     gemma4_recur_is_decode) const {
     return {
         /*.arch        =*/ model.arch,
         /*.hparams     =*/ model.hparams,
         /*.cparams     =*/ cparams,
         /*.ubatch      =*/ ubatch,
         /*.gtype       =*/ gtype,
+        /*.gemma4_recur_is_decode =*/ gemma4_recur_is_decode,
         /*.sched       =*/ sched.get(),
         /*.backend_cpu =*/ backend_cpu,
         /*.cvec        =*/ cvec.get(),
@@ -3624,6 +3695,12 @@ llama_context_params llama_context_default_params() {
         /*.n_outputs_max_per_seq       =*/ 1,
         /*.n_threads                   =*/ GGML_DEFAULT_N_THREADS, // TODO: better default
         /*.n_threads_batch             =*/ GGML_DEFAULT_N_THREADS,
+        /*.gemma4_recur                =*/ 0,
+        /*.gemma4_recur_beta           =*/ 1.0f,
+        /*.gemma4_recur_mode           =*/ 0,
+        /*.gemma4_recur_alpha          =*/ 0.0f,
+        /*.gemma4_recur_m              =*/ 1,
+        /*.gemma4_recur_scope          =*/ 1,
         /*.ctx_type                    =*/ LLAMA_CONTEXT_TYPE_DEFAULT,
         /*.rope_scaling_type           =*/ LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED,
         /*.pooling_type                =*/ LLAMA_POOLING_TYPE_UNSPECIFIED,
@@ -4245,6 +4322,18 @@ int32_t llama_decode(
         llama_context * ctx,
           llama_batch   batch) {
     const int ret = ctx->decode(batch);
+    if (ret != 0 && ret != 1) {
+        LLAMA_LOG_ERROR("%s: failed to decode, ret = %d\n", __func__, ret);
+    }
+
+    return ret;
+}
+
+int32_t llama_decode_with_gemma4_recur_role(
+        llama_context * ctx,
+          llama_batch   batch,
+               bool     is_decode) {
+    const int ret = ctx->decode(batch, is_decode);
     if (ret != 0 && ret != 1) {
         LLAMA_LOG_ERROR("%s: failed to decode, ret = %d\n", __func__, ret);
     }

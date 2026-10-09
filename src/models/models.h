@@ -863,6 +863,7 @@ struct llama_model_gemma4 : public llama_model_base {
         const llama_model & model;
 
         const int64_t n_embd_per_layer;
+        const bool gemma4_recur_is_decode;
 
         graph(const llama_model & model, const llm_graph_params & params);
 

@@ -446,6 +446,12 @@ struct lr_opt {
 struct ggml_opt_optimizer_params common_opt_lr_pars(void * userdata);
 
 struct common_params {
+    int32_t gemma4_recur          =     0; // extra Gemma 4 E4B decode passes
+    float gemma4_recur_beta       =  1.0f;
+    int32_t gemma4_recur_mode     =     0; // 0 = output, 1 = prelude-input-legacy, 2 = prelude-input
+    float gemma4_recur_alpha      =  0.0f;
+    int32_t gemma4_recur_m = 1;
+    int32_t gemma4_recur_scope = 1; // 0 = none, 1 = decode
     int32_t n_predict             =    -1; // max. number of new tokens to predict, -1 == no limit
     int32_t n_ctx                 =     0; // context size, 0 == context the model was trained with
     int32_t n_batch               =  2048; // logical batch size for prompt processing (must be >=32 to use BLAS)

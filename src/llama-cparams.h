@@ -16,6 +16,12 @@ struct llama_cparams {
     uint32_t n_rs_seq;        // number of recurrent-state snapshots per seq for rollback
     uint32_t n_outputs_max;   // max outputs supported by the context
     uint32_t n_outputs_max_per_seq;
+    int32_t  gemma4_recur = 0;
+    float    gemma4_recur_beta = 1.0f;
+    int32_t  gemma4_recur_mode = 0;
+    float    gemma4_recur_alpha = 0.0f;
+    int32_t gemma4_recur_m = 1;
+    int32_t gemma4_recur_scope = 1; // 0 = none, 1 = decode
     int32_t  n_threads;       // number of threads to use for generation
     int32_t  n_threads_batch; // number of threads to use for batch processing
 

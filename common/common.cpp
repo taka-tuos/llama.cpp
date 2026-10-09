@@ -1289,6 +1289,39 @@ struct common_init_result::impl {
 
 common_init_result::common_init_result(common_params & params, bool model_only) :
     pimpl(new impl{}) {
+    if (params.gemma4_recur > 0 && (params.speculative.has_dft() || params.speculative.has_synth() ||
+            std::any_of(params.speculative.types.begin(), params.speculative.types.end(), [](auto type) {
+                return type != COMMON_SPECULATIVE_TYPE_NONE;
+            }))) {
+        throw std::invalid_argument("gemma4_recur does not support speculative decoding");
+    }
+
+    if (params.gemma4_recur_mode != 2 && params.gemma4_recur == 4 && params.gemma4_recur_beta != 1.0f) {
+        throw std::invalid_argument("non-default gemma4_recur_beta requires N=1, 2, or 3 (or N=0)");
+    }
+    if (params.gemma4_recur_m < 1 || params.gemma4_recur_scope < 0 || params.gemma4_recur_scope > 1) {
+        throw std::invalid_argument("gemma4_recur requires positive M and scope none/decode; prefill/both unsupported in S8");
+    }
+    if ((params.gemma4_recur_mode == 1 || (params.gemma4_recur_mode == 0 && params.gemma4_recur == 4)) && params.gemma4_recur_m != 1) {
+        throw std::invalid_argument("legacy mode and N=4 require M=1");
+    }
+    if (params.gemma4_recur_mode < 0 || params.gemma4_recur_mode > 2) {
+        throw std::invalid_argument("gemma4_recur_mode must be output or prelude-input");
+    }
+    if (!std::isfinite(params.gemma4_recur_alpha) || params.gemma4_recur_alpha < 0.0f || params.gemma4_recur_alpha > 1.0f) {
+        throw std::invalid_argument("gemma4_recur_alpha must be finite and in [0, 1]");
+    }
+    if (params.gemma4_recur_mode == 0 && params.gemma4_recur_alpha != 0.0f) {
+        throw std::invalid_argument("gemma4_recur_alpha requires prelude-input mode");
+    }
+    if (params.gemma4_recur_mode == 1 && params.gemma4_recur > 3) {
+        throw std::invalid_argument("prelude-input-legacy mode supports N=0..3");
+    }
+
+    if (params.gemma4_recur < 0 || params.gemma4_recur > (params.gemma4_recur_mode == 2 ? 32 : 4)) {
+        throw std::invalid_argument("gemma4_recur requires N=0..32 for prelude-input, N=0..4 for output");
+    }
+
     auto mparams = common_model_params_to_llama(params);
     auto cparams = common_context_params_to_llama(params);
 
@@ -1719,6 +1752,12 @@ struct llama_model_params common_model_params_to_llama(common_params & params) {
 struct llama_context_params common_context_params_to_llama(const common_params & params) {
     auto cparams = llama_context_default_params();
 
+    cparams.gemma4_recur      = params.gemma4_recur;
+    cparams.gemma4_recur_beta = params.gemma4_recur_beta;
+    cparams.gemma4_recur_mode = params.gemma4_recur_mode;
+    cparams.gemma4_recur_alpha = params.gemma4_recur_alpha;
+    cparams.gemma4_recur_m = params.gemma4_recur_m;
+    cparams.gemma4_recur_scope = params.gemma4_recur_scope;
     cparams.n_ctx             = params.n_ctx;
     cparams.n_seq_max         = params.n_parallel;
     cparams.n_rs_seq          = params.speculative.need_n_rs_seq();
