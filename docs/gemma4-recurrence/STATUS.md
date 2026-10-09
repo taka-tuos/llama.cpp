@@ -16,8 +16,8 @@
 
 ## 未解決点
 
-新GPU版設定切替、実ブラウザ操作、長期利用、全設定組合せは未検証。総合RP品質改善は未認定。S7/D4、S9/D6、正式S20は未完のまま終了。fork remote未指定、push未実施。
+新GPU版設定切替、実ブラウザ操作、長期利用、全設定組合せは未検証。総合RP品質改善は未認定。S7/D4、S9/D6、正式S20は未完のまま終了。[GitHub fork](https://github.com/taka-tuos/poc.recur.gemma4-e4b.llama.cpp/tree/poc/gemma4-recurrence)の `poc/gemma4-recurrence` ブランチへ公開済み。
 
 ## 次の一作業
 
-ユーザーのfork URLが用意できたらremoteと公開branchを整理する。追加品質実験や新機能は自動で進めない。
+PoCの保存・forkへの公開は完了。追加品質実験や新機能は自動で進めない。GitHubの既定branchはmasterのままなので、実験コードを見るときはpoc/gemma4-recurrenceを選択する。
