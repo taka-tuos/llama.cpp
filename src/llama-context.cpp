@@ -80,39 +80,14 @@ static const llm_fused_op_probe llm_fused_op_dsv4_hc_post_probe = {
     /*.n_tokens_per_seq =*/ 1,
 };
 
-llama_context::llama_context(
-        const llama_model & model,
-              llama_context_params params) :
-    model(model),
-    cvec(std::make_unique<llama_adapter_cvec>()),
-    loras(std::make_unique<llama_adapter_loras>()),
-    balloc(std::make_unique<llama_batch_allocr>(model.hparams.n_pos_per_embd())) {
-    // TODO warning when creating llama_context with awkward ctx size that is not a power of 2,
-    //     may need to be backend-dependent
-    LLAMA_LOG_INFO("%s: constructing llama_context\n", __func__);
-
-    t_start_us = model.t_start_us;
-    t_load_us  = model.t_load_us;
-
+static void validate_gemma4_recur(const llama_model & model, const llama_cparams & cparams) {
     const auto & hparams = model.hparams;
-
-    cparams.n_seq_max = std::max(1u, params.n_seq_max);
-    if (cparams.n_seq_max > LLAMA_MAX_SEQ) {
-        throw std::runtime_error("n_seq_max must be <= " + std::to_string(LLAMA_MAX_SEQ));
-    }
-
-    cparams.gemma4_recur_beta = params.gemma4_recur_beta;
     if (!std::isfinite(cparams.gemma4_recur_beta) || cparams.gemma4_recur_beta < 0.0f || cparams.gemma4_recur_beta > 1.0f) {
         throw std::runtime_error("gemma4_recur_beta must be finite and in [0, 1]");
     }
-    if (params.gemma4_recur_mode != 2 && params.gemma4_recur == 4 && cparams.gemma4_recur_beta != 1.0f) {
+    if (cparams.gemma4_recur_mode != 2 && cparams.gemma4_recur == 4 && cparams.gemma4_recur_beta != 1.0f) {
         throw std::runtime_error("non-default gemma4_recur_beta requires N=1, 2, or 3 (or N=0)");
     }
-    cparams.gemma4_recur = params.gemma4_recur;
-    cparams.gemma4_recur_mode = params.gemma4_recur_mode;
-    cparams.gemma4_recur_alpha = params.gemma4_recur_alpha;
-    cparams.gemma4_recur_m = params.gemma4_recur_m;
-    cparams.gemma4_recur_scope = params.gemma4_recur_scope;
     if (cparams.gemma4_recur_m < 1 || cparams.gemma4_recur_scope < 0 || cparams.gemma4_recur_scope > 1) {
         throw std::runtime_error("gemma4_recur requires positive M and scope none/decode; prefill/both unsupported in S8");
     }
@@ -145,6 +120,36 @@ llama_context::llama_context(
             throw std::runtime_error("gemma4_recur requires a single sequence");
         }
     }
+}
+
+llama_context::llama_context(
+        const llama_model & model,
+              llama_context_params params) :
+    model(model),
+    cvec(std::make_unique<llama_adapter_cvec>()),
+    loras(std::make_unique<llama_adapter_loras>()),
+    balloc(std::make_unique<llama_batch_allocr>(model.hparams.n_pos_per_embd())) {
+    // TODO warning when creating llama_context with awkward ctx size that is not a power of 2,
+    //     may need to be backend-dependent
+    LLAMA_LOG_INFO("%s: constructing llama_context\n", __func__);
+
+    t_start_us = model.t_start_us;
+    t_load_us  = model.t_load_us;
+
+    const auto & hparams = model.hparams;
+
+    cparams.n_seq_max = std::max(1u, params.n_seq_max);
+    if (cparams.n_seq_max > LLAMA_MAX_SEQ) {
+        throw std::runtime_error("n_seq_max must be <= " + std::to_string(LLAMA_MAX_SEQ));
+    }
+
+    cparams.gemma4_recur_beta = params.gemma4_recur_beta;
+    cparams.gemma4_recur = params.gemma4_recur;
+    cparams.gemma4_recur_mode = params.gemma4_recur_mode;
+    cparams.gemma4_recur_alpha = params.gemma4_recur_alpha;
+    cparams.gemma4_recur_m = params.gemma4_recur_m;
+    cparams.gemma4_recur_scope = params.gemma4_recur_scope;
+    validate_gemma4_recur(model, cparams);
 
     cparams.n_rs_seq = params.n_rs_seq;
     if (cparams.n_rs_seq > 0 && !llm_arch_supports_rs_rollback(model.arch)) {
@@ -4327,6 +4332,34 @@ int32_t llama_decode(
     }
 
     return ret;
+}
+
+bool llama_context::set_gemma4_recur(llama_gemma4_recur_params params) {
+    auto candidate = cparams;
+    candidate.gemma4_recur = params.n;
+    candidate.gemma4_recur_m = params.m;
+    candidate.gemma4_recur_alpha = params.alpha;
+    candidate.gemma4_recur_beta = params.beta;
+    candidate.gemma4_recur_mode = params.mode;
+    candidate.gemma4_recur_scope = params.scope;
+    const auto previous = cparams;
+    try {
+        validate_gemma4_recur(model, candidate);
+        synchronize();
+        cparams = candidate;
+        sched_need_reserve = true;
+        sched_reserve();
+        return true;
+    } catch (const std::exception & error) {
+        cparams = previous;
+        sched_need_reserve = true;
+        LLAMA_LOG_ERROR("%s: %s\n", __func__, error.what());
+        return false;
+    }
+}
+
+bool llama_set_gemma4_recur(llama_context * ctx, llama_gemma4_recur_params params) {
+    return ctx->set_gemma4_recur(params);
 }
 
 int32_t llama_decode_with_gemma4_recur_role(

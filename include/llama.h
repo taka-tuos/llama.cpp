@@ -997,6 +997,21 @@ extern "C" {
             struct llama_context * ctx,
               struct llama_batch   batch);
 
+    struct llama_gemma4_recur_params {
+        int32_t n;
+        int32_t m;
+        float alpha;
+        float beta;
+        int32_t mode;  // 0 = output, 1 = legacy, 2 = linear
+        int32_t scope; // 0 = none, 1 = decode
+    };
+
+    // Call only between requests. The caller must clear prompt caches after a change.
+    // Returns false for invalid settings or a failed graph reservation.
+    LLAMA_API bool llama_set_gemma4_recur(
+            struct llama_context * ctx,
+            struct llama_gemma4_recur_params params);
+
     // Process a batch and declare whether its input contains sampled generation tokens.
     // Set is_decode to false for all prompt batches, including a one-token final prompt chunk.
     LLAMA_API int32_t llama_decode_with_gemma4_recur_role(

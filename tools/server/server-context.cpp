@@ -913,6 +913,7 @@ private:
     int n_empty_consecutive = 0;
 
     std::unique_ptr<server_prompt_cache> prompt_cache;
+    llama_gemma4_recur_params active_recur = {0, 1, 0.0f, 1.0f, 0, 1};
 
     server_metrics metrics;
 
@@ -1011,6 +1012,7 @@ private:
         const bool is_resume = sleeping;
 
         params_base = params;
+        active_recur = task_params::recur_defaults(params_base);
         const auto output_limits = server_output_limits(params_base);
         params_base.n_outputs_max = output_limits.total;
         params_base.n_outputs_max_per_seq = output_limits.per_seq;
@@ -1705,6 +1707,31 @@ private:
     }
 
     bool launch_slot_with_task(server_slot & slot, server_task && task) {
+        const auto & r = task.params.gemma4_recur;
+        const auto & a = active_recur;
+        const bool recur_changed = r.n != a.n || r.m != a.m || r.alpha != a.alpha ||
+                r.beta != a.beta || r.mode != a.mode || r.scope != a.scope;
+        if (recur_changed) {
+            const auto & spec = params_base.speculative;
+            if (slots.size() != 1 || mctx || spec.has_dft() || spec.has_synth() ||
+                    std::any_of(spec.types.begin(), spec.types.end(), [](auto type) {
+                        return type != COMMON_SPECULATIVE_TYPE_NONE;
+                    })) {
+                send_error(task, "Recurrence changes require one text-only slot without speculative decoding", ERROR_TYPE_INVALID_REQUEST);
+                return false;
+            }
+            if (!llama_set_gemma4_recur(ctx_tgt, r)) {
+                send_error(task, "Invalid or unavailable Gemma 4 recurrence settings (see server log)", ERROR_TYPE_INVALID_REQUEST);
+                return false;
+            }
+            slot.prompt_clear();
+            if (prompt_cache) {
+                prompt_cache = std::make_unique<server_prompt_cache>(params_base.cache_ram_mib, n_ctx);
+            }
+            active_recur = r;
+        }
+        SLT_DBG(slot, "gemma4_recur applied: %s\n", task.params.recur_to_json().dump().c_str());
+
         // process per-request lora adapters
         if (!task.params.lora.empty()) {
             auto task_loras = construct_lora_list(task.params.lora);
@@ -3660,7 +3687,7 @@ private:
         }
 
         bool gemma4_recur_is_decode = false;
-        if (params_base.gemma4_recur > 0) {
+        if (active_recur.n > 0) {
             const bool is_prompt = batch.tokens[off].is_prompt;
             for (int i = off + 1; i < off + batch_view.n_tokens; ++i) {
                 if (batch.tokens[i].is_prompt != is_prompt) {
@@ -3676,7 +3703,7 @@ private:
         // note: the sync is done here too, so that the wait is also covered by the yield
         int ret = 0;
         queue_tasks.yield_to_queue([&]() {
-            ret = params_base.gemma4_recur > 0
+            ret = active_recur.n > 0
                     ? llama_decode_with_gemma4_recur_role(ctx_tgt, batch_view, gemma4_recur_is_decode)
                     : llama_decode(ctx_tgt, batch_view);
             if (ret == 0 && has_output) {
@@ -4600,6 +4627,7 @@ static json get_res_props(const server_context_meta & meta, const common_params 
 
     task_params tparams;
     tparams.sampling = params.sampling;
+    tparams.gemma4_recur = task_params::recur_defaults(params);
     json default_generation_settings_for_props = json {
         { "params", tparams.to_json(true) },
         { "n_ctx",  meta.slot_n_ctx },

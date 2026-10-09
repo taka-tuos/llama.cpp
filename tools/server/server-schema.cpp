@@ -2,6 +2,8 @@
 
 #include "json-schema-to-grammar.h"
 
+#include <cmath>
+
 namespace server_schema {
 
 //
@@ -13,6 +15,46 @@ std::vector<std::unique_ptr<field>> make_llama_cmpl_schema(const common_params &
     auto add = [&](field * f) {
         fields.emplace_back(f);
     };
+
+    add((new field_json("gemma4_recur"))
+        ->set_desc("Gemma 4 E4B recurrence settings for this request (single slot only)")
+        ->set_handler([](field_eval_context & ctx, const json & request) {
+            const auto & data = request.at("gemma4_recur");
+            if (!data.is_object()) {
+                throw std::invalid_argument("gemma4_recur must be an object");
+            }
+            auto & r = ctx.params.gemma4_recur;
+            for (auto it = data.begin(); it != data.end(); ++it) {
+                const auto & key = it.key();
+                const auto & value = it.value();
+                if (key == "n" || key == "m") {
+                    const double number = value.is_number_integer() ? value.get<double>() : -1.0;
+                    if (number < (key == "n" ? 0 : 1) || number > (key == "n" ? 32 : INT32_MAX)) {
+                        throw std::invalid_argument("gemma4_recur n/m must be integers in range");
+                    }
+                    (key == "n" ? r.n : r.m) = value.get<int32_t>();
+                } else if (key == "alpha" || key == "beta") {
+                    if (!value.is_number() || !std::isfinite(value.get<double>()) ||
+                            value.get<double>() < 0.0 || value.get<double>() > 1.0) {
+                        throw std::invalid_argument("gemma4_recur alpha/beta must be in [0, 1]");
+                    }
+                    (key == "alpha" ? r.alpha : r.beta) = value.get<float>();
+                } else if (key == "mode") {
+                    const auto mode = value.get<std::string>();
+                    if (mode == "output") r.mode = 0;
+                    else if (mode == "prelude-input-legacy") r.mode = 1;
+                    else if (mode == "prelude-input") r.mode = 2;
+                    else throw std::invalid_argument("unsupported gemma4_recur mode");
+                } else if (key == "scope") {
+                    const auto scope = value.get<std::string>();
+                    if (scope == "none") r.scope = 0;
+                    else if (scope == "decode") r.scope = 1;
+                    else throw std::invalid_argument("gemma4_recur supports none/decode only");
+                } else {
+                    throw std::invalid_argument("unknown gemma4_recur setting: " + key);
+                }
+            }
+        }));
 
     add((new field_bool("verbose", params.verbose))
         ->set_desc("Include __verbose field in the response with additional debug information"));
@@ -518,6 +560,8 @@ task_params eval_llama_cmpl_schema(
                 const std::vector<llama_logit_bias> & logit_bias_eog,
                 const json & data) {
     task_params params;
+
+    params.gemma4_recur = task_params::recur_defaults(params_base);
 
     // Sampling parameter defaults are loaded from the global server context (but individual requests can still override them)
     params.sampling      = params_base.sampling;

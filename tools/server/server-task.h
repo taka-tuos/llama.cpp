@@ -48,6 +48,10 @@ enum stop_type {
 };
 
 struct task_params {
+    llama_gemma4_recur_params gemma4_recur = {0, 1, 0.0f, 1.0f, 0, 1};
+    static llama_gemma4_recur_params recur_defaults(const common_params & params);
+    json recur_to_json() const;
+
     bool stream          = false;
     bool include_usage   = false;
     bool cache_prompt    = true; // remember the prompt to avoid reprocessing all prompt

@@ -108,6 +108,8 @@ struct llama_context {
 
     void detach_threadpool();
 
+    bool set_gemma4_recur(llama_gemma4_recur_params params);
+
     void set_n_threads(int32_t n_threads, int32_t n_threads_batch);
 
     void set_abort_callback(bool (*abort_callback)(void * data), void * abort_callback_data);

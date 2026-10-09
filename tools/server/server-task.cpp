@@ -16,6 +16,18 @@
 // task_params
 //
 
+llama_gemma4_recur_params task_params::recur_defaults(const common_params & params) {
+    return {params.gemma4_recur, params.gemma4_recur_m, params.gemma4_recur_alpha,
+            params.gemma4_recur_beta, params.gemma4_recur_mode, params.gemma4_recur_scope};
+}
+
+json task_params::recur_to_json() const {
+    const auto & r = gemma4_recur;
+    return {{"n", r.n}, {"m", r.m}, {"alpha", r.alpha}, {"beta", r.beta},
+            {"mode", r.mode == 2 ? "prelude-input" : r.mode == 1 ? "prelude-input-legacy" : "output"},
+            {"scope", r.scope == 1 ? "decode" : "none"}};
+}
+
 json task_params::format_logit_bias(const std::vector<llama_logit_bias> & logit_bias) const {
     json data = json::array();
     for (const auto & lb : logit_bias) {
@@ -41,6 +53,7 @@ json task_params::to_json(bool only_metrics) const {
 
     if (only_metrics) {
         return json {
+            {"gemma4_recur",              recur_to_json()},
             {"seed",                      sampling.seed},
             {"temperature",               sampling.temp},
             {"dynatemp_range",            sampling.dynatemp_range},
@@ -93,7 +106,8 @@ json task_params::to_json(bool only_metrics) const {
     }
 
     return json {
-        {"seed",                      sampling.seed},
+        {"gemma4_recur",              recur_to_json()},
+            {"seed",                      sampling.seed},
         {"temperature",               sampling.temp},
         {"dynatemp_range",            sampling.dynatemp_range},
         {"dynatemp_exponent",         sampling.dynatemp_exponent},
