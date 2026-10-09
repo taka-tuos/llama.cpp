@@ -11,8 +11,10 @@
 
 実測ホストはRTX 2060 SUPER 8 GiB。モデルはGemma 4 E4B Q4_K_M、SHA-256 `dff0ffba4c90b4082d70214d53ce9504a28d4d8d998276dcb3b8881a656c742a`。記録したbuild環境はRelease、CUDA/native、GCC 16.2.1、CUDA toolkit 13.4.92、driver 615.71.09。これは保存済み環境情報で、現在の環境・他の配布GGUFの一致は保証しません。
 
-現在の実装差分は大Nrunと3seed runのsource.patchにバイト一致することを公開準備時に確認しました。patchのSHA-256は `49d6ac018f34f482843d3762dd494a3c10622b0d32d36235a8dc0475441b856b`。ファイルの出所・元SHA-256・同梱版SHA-256は[manifest](manifest.json)に記録しています。
+最初に保存した実装commit `8d132fe6a` の差分は、大Nrunと3seed runのsource.patchにバイト一致することを確認しました。後から追加したHTTP切替は[別の技術検証](server-integration.md)として扱います。patchのSHA-256は `49d6ac018f34f482843d3762dd494a3c10622b0d32d36235a8dc0475441b856b`。ファイルの出所・元SHA-256・同梱版SHA-256は[manifest](manifest.json)に記録しています。
 
 一次ログ、commands JSON、生成全文、HTML、build、モデル、KV/hidden dump、実行harnessはこのforkには同梱していません。記録内の元アーカイブ参照やコマンドは履歴情報です。このfork単独でそれらのコマンドを再実行できる構成ではなく、完全な再現用アーカイブではありません。未同梱の一次証拠までfork上で検査できるという主張はしません。
 
 実験の終了理由は総合的な改善を確認できず、追加探索を止めたことです。S7/D4未完、S9/D6未実施、正式S20評価未実施を合格へ変更していません。先頭のusageは現在の使い方、ここにある「次の探索」は当時の記載です。
+
+- [server設定切替の実装・技術smoke](server-integration.md)（2026-10-09）。追加のRP品質実験ではありません。

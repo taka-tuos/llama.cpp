@@ -26,9 +26,11 @@ extraは更新hiddenからQを計算し、同じ層のbase-pass KVをread-only�
 
 prompt roleはextraなし、generated-token roleだけに追加loopを適用します。roleはserverのis_promptから明示し、token数やpast KVから推測しません。最初の生成tokenは通常prefillのlogitsから選ばれるため、decode recurrenceは通常2個目の予測から作用します。
 
-フラグ省略/N0、beta0、scope noneは追加loopなしです。設定はcontext作成時固定。roleとN/M/alpha/beta/mode/scopeをgraph reuse判定に含め、新linearの大Nではgraph nodes予算を増やしています。
+フラグ省略/N0、beta0、scope noneは追加loopなしです。起動時設定に加え、単一slotのHTTP requestでは応答開始前に設定を変更できます。roleとN/M/alpha/beta/mode/scopeをgraph reuse判定に含め、新linearの大Nではgraph nodes予算を増やしています。
 
-C APIで呼ぶ場合、`llama_decode_with_gemma4_recur_role(ctx, batch, is_decode)` を使います。promptにはfalse、生成済みtokenの入力にはtrueを渡します。通常の `llama_decode()` はこのforkではprompt roleのままなので、recurrenceを有効にしても追加loopを実行しません。独自APIとcontext paramsを追加しており、既存のprebuilt bindingsとのABI互換性は保証しません。
+C APIで呼ぶ場合、`llama_decode_with_gemma4_recur_role(ctx, batch, is_decode)` を使います。promptにはfalse、生成済みtokenの入力にはtrueを渡します。通常の `llama_decode()` はこのforkではprompt roleのままなので、recurrenceを有効にしても追加loopを実行しません。`llama_set_gemma4_recur()` は応答間で使う設定APIです。起動時と同じ検証を行い、同期後にgraphをreserveし直します。呼び出し側は変更後にprompt/cacheを破棄する必要があります。serverではworker側で適用し、params_baseの起動時設定と実適用値を分けて保持します。
+
+独自APIとcontext paramsを追加しており、既存のprebuilt bindingsとのABI互換性は保証しません。
 
 ## 終了時点
 

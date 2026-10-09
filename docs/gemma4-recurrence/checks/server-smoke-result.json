@@ -1,0 +1,212 @@
+{
+  "status": "PASS",
+  "backend": "CPU",
+  "checks": [
+    {
+      "label": "baseline",
+      "applied": {
+        "n": 0,
+        "m": 1,
+        "alpha": 0.0,
+        "beta": 1.0,
+        "mode": "output",
+        "scope": "decode"
+      },
+      "tokens": [
+        236888,
+        2088,
+        740,
+        564
+      ],
+      "cached_prompt": 2
+    },
+    {
+      "label": "linear-n1",
+      "applied": {
+        "n": 1,
+        "m": 4,
+        "alpha": 0.0,
+        "beta": 0.5,
+        "mode": "prelude-input",
+        "scope": "decode"
+      },
+      "tokens": [
+        236888,
+        2088,
+        740,
+        564
+      ],
+      "cached_prompt": 2
+    },
+    {
+      "label": "restored-default",
+      "applied": {
+        "n": 0,
+        "m": 1,
+        "alpha": 0.0,
+        "beta": 1.0,
+        "mode": "output",
+        "scope": "decode"
+      },
+      "tokens": [
+        236888,
+        2088,
+        740,
+        564
+      ],
+      "cached_prompt": 2
+    },
+    {
+      "label": "beta-zero",
+      "applied": {
+        "n": 1,
+        "m": 4,
+        "alpha": 0.0,
+        "beta": 0.0,
+        "mode": "prelude-input",
+        "scope": "decode"
+      },
+      "tokens": [
+        236888,
+        2088,
+        740,
+        564
+      ],
+      "cached_prompt": 2
+    },
+    {
+      "label": "linear-n2-alpha",
+      "applied": {
+        "n": 2,
+        "m": 2,
+        "alpha": 0.25,
+        "beta": 0.75,
+        "mode": "prelude-input",
+        "scope": "decode"
+      },
+      "tokens": [
+        236888,
+        2088,
+        740,
+        564
+      ],
+      "cached_prompt": 2
+    },
+    {
+      "label": "linear-n32",
+      "applied": {
+        "n": 32,
+        "m": 48,
+        "alpha": 0.0,
+        "beta": 0.5,
+        "mode": "prelude-input",
+        "scope": "decode"
+      },
+      "tokens": [
+        236888,
+        2088,
+        740,
+        564
+      ],
+      "cached_prompt": 2
+    },
+    {
+      "label": "streaming",
+      "applied": {
+        "n": 1,
+        "m": 4,
+        "alpha": 0.0,
+        "beta": 0.5,
+        "mode": "prelude-input",
+        "scope": "decode"
+      },
+      "tokens": [],
+      "cached_prompt": 2
+    },
+    {
+      "label": "queued-n1",
+      "applied": {
+        "n": 1,
+        "m": 4,
+        "alpha": 0.0,
+        "beta": 0.5,
+        "mode": "prelude-input",
+        "scope": "decode"
+      },
+      "tokens": [
+        236888,
+        2088,
+        740,
+        564
+      ],
+      "cached_prompt": 2
+    },
+    {
+      "label": "queued-n2",
+      "applied": {
+        "n": 2,
+        "m": 2,
+        "alpha": 0.0,
+        "beta": 0.5,
+        "mode": "prelude-input",
+        "scope": "decode"
+      },
+      "tokens": [
+        236888,
+        2088,
+        740,
+        564
+      ],
+      "cached_prompt": 2
+    },
+    {
+      "label": "bad-m",
+      "status": 400
+    },
+    {
+      "label": "bad-scope",
+      "status": 400
+    },
+    {
+      "label": "bad-type",
+      "status": 400
+    },
+    {
+      "label": "bad-combination",
+      "status": 400
+    },
+    {
+      "label": "bad-key",
+      "status": 400
+    },
+    {
+      "label": "after-invalid",
+      "applied": {
+        "n": 0,
+        "m": 1,
+        "alpha": 0.0,
+        "beta": 1.0,
+        "mode": "output",
+        "scope": "decode"
+      },
+      "tokens": [
+        236888,
+        2088,
+        740,
+        564
+      ],
+      "cached_prompt": 2
+    },
+    {
+      "label": "openai-chat-custom-json",
+      "applied": {
+        "n": 1,
+        "m": 4,
+        "alpha": 0,
+        "beta": 0.5,
+        "mode": "prelude-input",
+        "scope": "decode"
+      }
+    }
+  ]
+}

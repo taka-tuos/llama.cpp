@@ -10,6 +10,6 @@
 - [計算仕様とAPIの制限](implementation.md)
 - [枝刈りした作業記録・検証結果・考察](records/README.md)
 
-対象はGemma 4 E4Bのtext入力、単一sequence、decode側のみです。新しい方式では追加回数Nを0-32に設定できます。prefill/both、応答ごとの設定変更、専用WebUI設定パネルは未実装です。設定はserver起動時に固定し、変更時は再起動します。
+対象はGemma 4 E4Bのtext入力、単一sequence、decode側のみです。新しい方式では追加回数Nを0-32に設定できます。prefill/bothと専用WebUI設定パネルは未実装です。単一slotではHTTP requestの `gemma4_recur`、または既存WebUIのCustom JSON欄から応答ごとに設定できます。省略した項目は起動時設定を使います。
 
-既存のCLIは内部HTTP server経由で検証されています。独立serverの内蔵WebUI操作、長期利用、context shift、他モデル/量子化/各backendの動作は検証済みとして扱いません。この公開準備では再build・新推論・GPU再検証を行っていません。
+既存のCLIは内部HTTP server経由で検証されています。独立serverの内蔵WebUI操作、長期利用、context shift、他モデル/量子化/各backendの動作は検証済みとして扱いません。初回保存後にserverの設定変更対応と技術smokeを追加しました。実施範囲と現在地は[STATUS](STATUS.md)、結果は[server対応記録](records/server-integration.md)を参照してください。追加のRP品質実験は行っていません。
