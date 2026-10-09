@@ -1,0 +1,61 @@
+{
+  "base_commit": "6a1a922d269908a29cbd4b49c27e6a8e7fd10fae",
+  "implementation_commit": "8d132fe6ad6dad48f1cab25374354a6f708a2a0c",
+  "archive_policy": "Selected Markdown only; original records preserved locally; links to omitted files converted to archive references; experiment-root absolute paths replaced. No models, builds, dumps, raw logs or HTML bundled.",
+  "records": [
+    {
+      "source_archive_path": "runs/2026-10-02-s8/completion.md",
+      "source_sha256": "1ed476764a557d82d3ab9f8cced3ec8fdae3105d2cbd68d2f63e4f16f04e7301",
+      "published_file": "s8-completion.md",
+      "published_sha256": "807687c0142e68b1aa85c012971d726e8006109d051466f2ceb9f562f24e9b67"
+    },
+    {
+      "source_archive_path": "runs/2026-10-02-s8/technical.md",
+      "source_sha256": "c6e88d943e386551c612f53239b73aafe72b6ff669a9499706e237d88e5f6fd4",
+      "published_file": "s8-technical.md",
+      "published_sha256": "1d603740d4270633c2f1d4aea27a949735b2870a98ea4e918f40f8087ca32630"
+    },
+    {
+      "source_archive_path": "runs/2026-10-02-s8/review.md",
+      "source_sha256": "e13f06d46030b69b11f3456091363bf8384c565eab6f488e291696b2aca112d3",
+      "published_file": "s8-review.md",
+      "published_sha256": "b5b27e5ed7a77f95b3552255692d47d73811de5732ec6290662e86ea337db7e7"
+    },
+    {
+      "source_archive_path": "runs/2026-10-03-s8-long-rp/completion.md",
+      "source_sha256": "3b98bb562824335e2ce59502c860cf0412f6033d69db50cafdb7803b891cb2d1",
+      "published_file": "long-rp-completion.md",
+      "published_sha256": "927dc452d391d9e86361af3c45b73e32e036446da4e2b59774522d2c31882156"
+    },
+    {
+      "source_archive_path": "runs/2026-10-03-s8-long-rp/review.md",
+      "source_sha256": "bc985bce7a684d4f6ace9f964b6125a4422eb00a23b0fc2513e8641907301af0",
+      "published_file": "long-rp-review.md",
+      "published_sha256": "894b0ecca31fbcee0fb032ddc65fd91bc5a319a21a92348814f3a197223073a8"
+    },
+    {
+      "source_archive_path": "runs/2026-10-03-s8-large-n/completion.md",
+      "source_sha256": "f5f9e32e693fd9721584944375fe62fff0dcf906dd94d8960f9d63117ec94a15",
+      "published_file": "large-n-completion.md",
+      "published_sha256": "4f57602754cc22be9992a74ba813309357cbe88d338e2fd16bb83eb9406d6346"
+    },
+    {
+      "source_archive_path": "runs/2026-10-03-s8-large-n/review.md",
+      "source_sha256": "7dbd1b2f1ab2e765cbdff971437facbda3c153e6f780dcf989682a3240dde83b",
+      "published_file": "large-n-review.md",
+      "published_sha256": "27a556c41fd087cd309f15cd94b0e1d1697e5f47be767a781c0a50a24e708c41"
+    },
+    {
+      "source_archive_path": "runs/2026-10-04-s8-multiturn-3seed/completion.md",
+      "source_sha256": "03e2abe4bc4447dad43a368fb9cdfa900c7f4a454d897572728aaa6aa5a092d6",
+      "published_file": "multiturn-completion.md",
+      "published_sha256": "7f7220337a61c06bcd7176bf9d7e46202c6c84042655c5299208ea8f3644c4f9"
+    },
+    {
+      "source_archive_path": "runs/2026-10-04-s8-multiturn-3seed/review.md",
+      "source_sha256": "15997c88aa280178646ce52f048f1105889e5803cd9eed359fea4b46158c6182",
+      "published_file": "multiturn-review.md",
+      "published_sha256": "2396ce5579aa52222997d6414c6ef0c4eaed2c01b3600f4ef467848cb9ba0c13"
+    }
+  ]
+}

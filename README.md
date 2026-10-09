@@ -1,3 +1,5 @@
+> **Gemma 4 E4B recurrence PoC fork:** 学習なしの追加反復を試した実験コードです。総合的なRP品質改善は確認できず、実験を終了しました。[設定方法・制限・作業記録](docs/gemma4-recurrence/README.md)を参照してください。以下はupstreamのREADMEです。
+
 # llama.cpp
 
 ![llama](https://raw.githubusercontent.com/ggml-org/llama.brand/refs/heads/master/cover/llama-cpp/cover-llama-cpp-dark.svg)
