@@ -2914,15 +2914,16 @@ void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {
 #endif
 
     for (uint32_t w = 0; w < DMMV_WG_SIZE_COUNT; ++w) {
-        const uint32_t wg_size_subgroup   = (w == DMMV_WG_SIZE_SUBGROUP) ? subgroup_size : (subgroup_size * 4);
-        const uint32_t wg_size_subgroup16 = (w == DMMV_WG_SIZE_SUBGROUP) ? subgroup_size16 : (subgroup_size16 * 4);
+        const uint32_t wg_scale = w == DMMV_WG_SIZE_SUBGROUP ? 1 : w == DMMV_WG_SIZE_MEDIUM ? 2 : 4;
+        const uint32_t wg_size_subgroup   = subgroup_size * wg_scale;
+        const uint32_t wg_size_subgroup16 = subgroup_size16 * wg_scale;
 
         const shader_reduction_mode reduc = (use_subgroups && w == DMMV_WG_SIZE_SUBGROUP) ? SHADER_REDUCTION_MODE_SUBGROUP :
-                                            (use_subgroups && w == DMMV_WG_SIZE_LARGE) ? SHADER_REDUCTION_MODE_HYBRID :
+                                            use_subgroups ? SHADER_REDUCTION_MODE_HYBRID :
                                             SHADER_REDUCTION_MODE_SHMEM;
 
         const shader_reduction_mode reduc16 = (use_subgroups16 && w == DMMV_WG_SIZE_SUBGROUP) ? SHADER_REDUCTION_MODE_SUBGROUP :
-                                              (use_subgroups16 && w == DMMV_WG_SIZE_LARGE) ? SHADER_REDUCTION_MODE_HYBRID :
+                                              use_subgroups16 ? SHADER_REDUCTION_MODE_HYBRID :
                                               SHADER_REDUCTION_MODE_SHMEM;
 
         for (uint32_t i = 0; i < mul_mat_vec_max_cols; ++i) {
@@ -5586,6 +5587,15 @@ static vk_pipeline ggml_vk_get_dequantize_mul_mat_vec(ggml_backend_vk_context * 
             if (m <= 8192 && k >= 1024) {
                 dmmv_wg = DMMV_WG_SIZE_LARGE;
             }
+        }
+    }
+
+    if (ctx->device->vendor_id == VK_VENDOR_ID_NVIDIA &&
+        ctx->device->properties.deviceID == 0x1022 && num_cols == 1) {
+        if (a_type == GGML_TYPE_Q8_0) {
+            dmmv_wg = DMMV_WG_SIZE_LARGE;
+        } else if (a_type == GGML_TYPE_F16 || a_type == GGML_TYPE_F32) {
+            dmmv_wg = DMMV_WG_SIZE_MEDIUM;
         }
     }
 

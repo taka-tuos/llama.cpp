@@ -422,6 +422,7 @@ inline vk_conv_block_size vk_conv_block_sizes[CONV_SHAPE_COUNT] = {
 
 enum dmmv_wg_sizes {
     DMMV_WG_SIZE_SUBGROUP,
+    DMMV_WG_SIZE_MEDIUM,
     DMMV_WG_SIZE_LARGE,
     DMMV_WG_SIZE_COUNT,
 };
