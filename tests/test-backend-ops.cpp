@@ -9107,6 +9107,10 @@ struct test_generic_op : public test_case {
     }
 
     void initialize_tensors(ggml_context * ctx) override {
+        for (ggml_tensor * sentinel : sentinels) {
+            init_tensor_uniform(sentinel);
+        }
+
         ggml_tensor * out = ggml_get_tensor(ctx, "out");
 
         std::random_device rd;
