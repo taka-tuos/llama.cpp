@@ -2915,10 +2915,10 @@ void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {
 
     if (device->vendor_id == VK_VENDOR_ID_NVIDIA && device->properties.deviceID == 0x1022) {
         const shader_reduction_mode reduction = use_subgroups ? SHADER_REDUCTION_MODE_HYBRID : SHADER_REDUCTION_MODE_SHMEM;
-        ggml_vk_create_pipeline(device, device->pipeline_kepler_ffn_q8_dot4, "mul_mat_vec_kepler_q8_0_dot4",
+        ggml_vk_create_pipeline(device, device->pipeline_kepler_ffn_q8_dot4, "mul_mat_vec_kepler_q8_0_dot4_rows2",
                                 arr_dmmv_q8_0_f32_f32_len[reduction], arr_dmmv_q8_0_f32_f32_data[reduction], "main",
-                                mul_mat_vec_num_bindings, sizeof(vk_mat_vec_push_constants), {1, 1, 1},
-                                {subgroup_size * 4, 1, 1, 3}, 1, true, use_subgroups, force_subgroup_size);
+                                mul_mat_vec_num_bindings, sizeof(vk_mat_vec_push_constants), {2, 1, 1},
+                                {subgroup_size * 4, 2, 1, 3}, 1, true, use_subgroups, force_subgroup_size);
     }
 
     for (uint32_t w = 0; w < DMMV_WG_SIZE_COUNT; ++w) {
