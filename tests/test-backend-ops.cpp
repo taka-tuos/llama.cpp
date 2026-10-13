@@ -1681,6 +1681,13 @@ struct test_case {
             mem += tensor_op_size(ggml_graph_node(gf, i));
         }
 
+        // Warm up the expanded graph before timing descriptor and command reuse.
+        status = ggml_backend_graph_compute(backend, gf);
+        if (status != GGML_STATUS_SUCCESS) {
+            fprintf(stderr, "%s: expanded graph warmup failed. status=%s \n", __func__, ggml_status_to_string(status));
+            return false;
+        }
+
         // run
         int64_t total_time_us = 0;
         int64_t total_mem = 0;
