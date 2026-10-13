@@ -2913,6 +2913,14 @@ void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {
 #define OCP_DMMV_DATA(NAME, REDUC) NAME ## _data[REDUC]
 #endif
 
+    if (device->vendor_id == VK_VENDOR_ID_NVIDIA && device->properties.deviceID == 0x1022) {
+        const shader_reduction_mode reduction = use_subgroups ? SHADER_REDUCTION_MODE_HYBRID : SHADER_REDUCTION_MODE_SHMEM;
+        ggml_vk_create_pipeline(device, device->pipeline_kepler_ffn_q8_dot4, "mul_mat_vec_kepler_q8_0_dot4",
+                                arr_dmmv_q8_0_f32_f32_len[reduction], arr_dmmv_q8_0_f32_f32_data[reduction], "main",
+                                mul_mat_vec_num_bindings, sizeof(vk_mat_vec_push_constants), {1, 1, 1},
+                                {subgroup_size * 4, 1, 1, 3}, 1, true, use_subgroups, force_subgroup_size);
+    }
+
     for (uint32_t w = 0; w < DMMV_WG_SIZE_COUNT; ++w) {
         const uint32_t wg_scale = w == DMMV_WG_SIZE_SUBGROUP ? 1 : w == DMMV_WG_SIZE_MEDIUM ? 2 : 4;
         const uint32_t wg_size_subgroup   = subgroup_size * wg_scale;
@@ -6711,6 +6719,15 @@ static void ggml_vk_mul_mat_vec_q_f16(ggml_backend_vk_context * ctx, vk_context&
         // Fall back to f16 dequant mul mat
         dmmv = ggml_vk_get_dequantize_mul_mat_vec(ctx, src0->type, src1->type, ne11, ne20, ne00);
         quantize_y = false;
+    }
+
+    if (!quantize_y && !swap_inputs && src0->type == GGML_TYPE_Q8_0 && src1->type == GGML_TYPE_F32 &&
+        ctx->device->vendor_id == VK_VENDOR_ID_NVIDIA && ctx->device->properties.deviceID == 0x1022 &&
+        ne11 == 1 && ne02 == 1 && ne03 == 1 && ne12 == 1 && ne13 == 1 &&
+        ((ne00 == 2048 && ne20 == 8192) || (ne00 == 8192 && ne20 == 2048)) &&
+        ggml_is_contiguous(src0) && ggml_is_contiguous(src1) && ggml_is_contiguous(dst) &&
+        reinterpret_cast<uintptr_t>(src0->data) % 8 == 0 && reinterpret_cast<uintptr_t>(src1->data) % 16 == 0) {
+        dmmv = ctx->device->pipeline_kepler_ffn_q8_dot4;
     }
 
     if (quantize_y) {
