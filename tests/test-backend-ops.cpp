@@ -5329,6 +5329,44 @@ struct test_mul_mat : public test_case {
     }
 };
 
+// Experiment-only hot-shape reference checks for row/group changes.
+struct test_kepler_rows_check : public test_mul_mat {
+    const bool offset_view;
+    const bool add_bias;
+    test_kepler_rows_check(ggml_type type, int64_t rows, int64_t cols, bool offset, bool bias)
+        : test_mul_mat(type, GGML_TYPE_F32, rows, 1, cols, {1, 1}, {1, 1}),
+          offset_view(offset), add_bias(bias) {}
+    std::string vars() override {
+        return test_mul_mat::vars() + ",offset_view=" + std::to_string(offset_view) + ",add_bias=" + std::to_string(add_bias);
+    }
+    ggml_tensor * build_graph(ggml_context * ctx) override {
+        const int64_t prefix_a = offset_view ? 256 : 0;
+        const int64_t prefix_b = offset_view ? 4 : 0;
+        ggml_tensor * parent_a = ggml_new_tensor_1d(ctx, type_a, k*m + prefix_a);
+        ggml_tensor * parent_b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, k + prefix_b);
+        ggml_set_name(parent_a, "initialized_parent_a");
+        ggml_set_name(parent_b, "initialized_parent_b");
+        ggml_tensor * a = ggml_view_2d(ctx, parent_a, k, m,
+            k/ggml_blck_size(type_a)*ggml_type_size(type_a),
+            prefix_a/ggml_blck_size(type_a)*ggml_type_size(type_a));
+        ggml_tensor * b = ggml_view_2d(ctx, parent_b, k, 1, k*sizeof(float), prefix_b*sizeof(float));
+        GGML_ASSERT(ggml_is_contiguous(a) && ggml_is_contiguous(b));
+        ggml_set_name(a, "contiguous_a_view");
+        ggml_set_name(b, "contiguous_b_view");
+        ggml_tensor * out = ggml_mul_mat(ctx, a, b);
+        ggml_set_name(out, "rows_check_matvec");
+        if (add_bias) {
+            ggml_tensor * bias = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, m, 1);
+            ggml_set_name(bias, "rows_check_bias");
+            out = ggml_add(ctx, out, bias);
+            ggml_set_name(out, "rows_check_matvec_add");
+        }
+        return out;
+    }
+    bool run_whole_graph() override { return true; }
+    std::string op_desc(ggml_tensor *) override { return "KEPLER_ROWS_CHECK"; }
+};
+
 // GGML_HINT_SRC0_IS_HADAMARD
 struct test_mul_mat_hadamard : public test_mul_mat {
     test_mul_mat_hadamard(ggml_type type_a = GGML_TYPE_F32, ggml_type type_b = GGML_TYPE_F32,
@@ -9635,6 +9673,14 @@ static const ggml_type other_types[] = {
 static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
     std::vector<std::unique_ptr<test_case>> test_cases;
     std::default_random_engine rng(0);
+    // Keep these explicit PoC checks selectable without broadening normal perf.
+    for (ggml_type type : {GGML_TYPE_Q8_0, GGML_TYPE_F16}) {
+        for (const auto shape : {std::array<int64_t, 2>{8192, 2048}, std::array<int64_t, 2>{2048, 8192}}) {
+            test_cases.emplace_back(new test_kepler_rows_check(type, shape[0], shape[1], true, false));
+            test_cases.emplace_back(new test_kepler_rows_check(type, shape[0], shape[1], false, true));
+        }
+    }
+
 
     // unary ops
     for (ggml_type type : {GGML_TYPE_F16, GGML_TYPE_F32, GGML_TYPE_BF16}) {
