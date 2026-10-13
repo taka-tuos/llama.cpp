@@ -7,6 +7,8 @@
 
 layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
 
+layout(constant_id = 3) const uint KEPLER_DOT_MODE = 0;
+
 #if !defined(DATA_A_F32) && !defined(DATA_A_F16) && !defined(DATA_A_BF16)
 #define K_PER_ITER 8
 #else
@@ -84,8 +86,39 @@ void iter(inout FLOAT_TYPE temp[NUM_COLS][NUM_ROWS], const uint first_row, const
             }
 
             // matrix multiplication
-            FLOAT_TYPE rowtmp = dot(bv0, v);
-            rowtmp += dot(bv1, v2);
+            FLOAT_TYPE rowtmp;
+#if defined(DATA_A_Q8_0)
+            if (KEPLER_DOT_MODE == 1) {
+                const FLOAT_TYPE s0 = dot(bv0, v);
+                const FLOAT_TYPE s1 = dot(bv1, v2);
+                rowtmp = s0 + s1;
+            } else if (KEPLER_DOT_MODE == 2) {
+                precise FLOAT_TYPE s0 = fma(bv0.x, v.x, fma(bv0.y, v.y, fma(bv0.z, v.z, bv0.w * v.w)));
+                precise FLOAT_TYPE s1 = fma(bv1.x, v2.x, fma(bv1.y, v2.y, fma(bv1.z, v2.z, bv1.w * v2.w)));
+                precise FLOAT_TYPE sum = s0 + s1;
+                rowtmp = sum;
+            } else if (KEPLER_DOT_MODE == 3) {
+                precise FLOAT_TYPE s0 = fma(bv0.x, v.x, bv0.y * v.y);
+                precise FLOAT_TYPE s1 = fma(bv0.z, v.z, bv0.w * v.w);
+                precise FLOAT_TYPE s2 = fma(bv1.x, v2.x, bv1.y * v2.y);
+                precise FLOAT_TYPE s3 = fma(bv1.z, v2.z, bv1.w * v2.w);
+                precise FLOAT_TYPE sum = (s0 + s1) + (s2 + s3);
+                rowtmp = sum;
+            } else if (KEPLER_DOT_MODE == 4) {
+                precise vec4 p0 = bv0 * v;
+                precise vec4 p1 = bv1 * v2;
+                precise FLOAT_TYPE s0 = p0.x + p0.y;
+                precise FLOAT_TYPE s1 = p0.z + p0.w;
+                precise FLOAT_TYPE s2 = p1.x + p1.y;
+                precise FLOAT_TYPE s3 = p1.z + p1.w;
+                precise FLOAT_TYPE sum = (s0 + s1) + (s2 + s3);
+                rowtmp = sum;
+            } else
+#endif
+            {
+                rowtmp = dot(bv0, v);
+                rowtmp += dot(bv1, v2);
+            }
 
             if (dm.y == 0)
                 rowtmp *= dm.x;
