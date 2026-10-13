@@ -83,10 +83,13 @@ int main(int argc, char **argv) {
     const uint32_t repeats = (uint32_t) strtoul(argv[6], NULL, 0);
     if (mode > 4 || (k != 1024 && k != 2048 && k != 8192) || !m || m > 8192 ||
         !iterations || iterations > 100 || !repeats || repeats > 10) return 2;
+    const char *rows_env = getenv("KEPLER_TEST_ROWS");
+    const uint32_t rows = rows_env ? (uint32_t) strtoul(rows_env, NULL, 0) : 1;
+    if (rows != 1 && rows != 2) return 2;
     const VkDeviceSize bytes = (uint64_t) k * m / 32 * 34;
     const VkDeviceSize dst_bytes = m * sizeof(float);
     const VkDeviceSize activation_bytes = k * sizeof(float);
-    const uint64_t groups64 = m;
+    const uint64_t groups64 = ((uint64_t) m + rows - 1) / rows;
 
     const VkApplicationInfo app = {
         .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -228,7 +231,7 @@ int main(int argc, char **argv) {
     VkShaderModule module;
     VK_OK(vkCreateShaderModule(dev, &smci, NULL, &module));
     free(spirv);
-    const uint32_t spec_data[4] = {128, 1, 1, mode};
+    const uint32_t spec_data[4] = {128, rows, 1, mode};
     const VkSpecializationMapEntry spec_entries[4] = {{0, 0, 4}, {1, 4, 4}, {2, 8, 4}, {3, 12, 4}};
     const VkSpecializationInfo spec = { .mapEntryCount = 4, .pMapEntries = spec_entries, .dataSize = sizeof(spec_data), .pData = spec_data };
     const VkComputePipelineCreateInfo cpci = {
@@ -361,6 +364,7 @@ int main(int argc, char **argv) {
     // Submit once before measuring to warm the complete command sequence.
     VK_OK(vkQueueSubmit(queue, 1, &submit, VK_NULL_HANDLE));
     VK_OK(vkQueueWaitIdle(queue));
+    printf("rows_per_group=%u\ngroups=%" PRIu64 "\n", rows, groups64);
     printf("device=%s\nmode=%u\nK=%u\nM=%u\nWG=128\nsubgroup=32\nrobustness=disabled\n", props.deviceName, mode, k, m);
     printf("weight_bytes=%" PRIu64 "\niterations=%u\nrepeats=%u\ncommand_recording=outside_timing\n", (uint64_t) bytes, iterations, repeats);
     const uint64_t timestamp_mask = timestamp_bits == 64 ? UINT64_MAX : ((UINT64_C(1) << timestamp_bits) - 1);
