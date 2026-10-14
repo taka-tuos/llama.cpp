@@ -16,6 +16,10 @@ layout(constant_id = 3) const uint KEPLER_DOT_MODE = 0;
 #endif
 
 
+#if defined(DATA_A_Q8_0) && defined(KEPLER_WIDE_RECHECK)
+layout(binding = 0) readonly buffer AAlignedWords { uint data_a_words[]; };
+#endif
+
 uint a_offset, b_offset, d_offset, y_offset;
 
 vec4 load_b(const uint j, const uint iybs, const uint iqs, const bool lastiter, out bool OOB_y, out bool OOB_z, out bool OOB_w) {
@@ -76,8 +80,31 @@ void iter(inout FLOAT_TYPE temp[NUM_COLS][NUM_ROWS], const uint first_row, const
             ibi += p.ncols;
 
 #if K_PER_ITER == 8
-            vec4 v = dequantize4(ib, iqs, a_offset);
-            vec4 v2 = dequantize4(ib, iqs+(4/QUANT_R), a_offset);
+            vec4 v, v2;
+#if defined(DATA_A_Q8_0) && defined(KEPLER_WIDE_RECHECK)
+            if (KEPLER_DOT_MODE == 5 || KEPLER_DOT_MODE == 6) {
+                const uint byte_pos = 34u * (a_offset + ib) + 2u + iqs;
+                const uint word_pos = byte_pos >> 2;
+                const uint half_shift = (byte_pos & 2u) >> 1;
+                const uint w0 = data_a_words[word_pos];
+                const uint w1 = data_a_words[word_pos + 1u];
+                uint last_word;
+                if (KEPLER_DOT_MODE == 5) {
+                    last_word = data_a_words[word_pos + 1u + half_shift];
+                } else {
+                    last_word = uint(data_a_packed16[a_offset + ib].qs[iqs/2 + 3u]);
+                }
+                const uint mask = 0u - half_shift;
+                const uint q0 = (w0 >> (16u * half_shift)) | ((w1 << 16u) & mask);
+                const uint q1 = (w1 >> (16u * half_shift)) | ((last_word << 16u) & mask);
+                v = vec4(unpack8(int32_t(q0)));
+                v2 = vec4(unpack8(int32_t(q1)));
+            } else
+#endif
+            {
+                v = dequantize4(ib, iqs, a_offset);
+                v2 = dequantize4(ib, iqs+(4/QUANT_R), a_offset);
+            }
 
             const vec2 dm = get_dm(ib, a_offset);
             if (dm.y != 0) { // quant has min component
@@ -97,7 +124,11 @@ void iter(inout FLOAT_TYPE temp[NUM_COLS][NUM_ROWS], const uint first_row, const
                 precise FLOAT_TYPE s1 = fma(bv1.x, v2.x, fma(bv1.y, v2.y, fma(bv1.z, v2.z, bv1.w * v2.w)));
                 precise FLOAT_TYPE sum = s0 + s1;
                 rowtmp = sum;
-            } else if (KEPLER_DOT_MODE == 3) {
+            } else if (KEPLER_DOT_MODE == 3
+#ifdef KEPLER_WIDE_RECHECK
+                       || KEPLER_DOT_MODE == 5 || KEPLER_DOT_MODE == 6
+#endif
+            ) {
                 precise FLOAT_TYPE s0 = fma(bv0.x, v.x, bv0.y * v.y);
                 precise FLOAT_TYPE s1 = fma(bv0.z, v.z, bv0.w * v.w);
                 precise FLOAT_TYPE s2 = fma(bv1.x, v2.x, bv1.y * v2.y);
