@@ -780,15 +780,15 @@ void process_shaders() {
 
     std::map<std::string, std::string> base_dict = {{"FLOAT_TYPE", "float"}, {"FLOAT_TYPEV2", "vec2"}};
 
-    // Keep Int64 capability out of generic shaders; only K20c selects these.
+    // Keep Int64 capability out of generic shaders; only Kepler tuning selects these.
     string_to_spv("mul_mat_vec_kepler_f16_activation64", "mul_mat_vec.comp",
         merge_maps(base_dict, {{"DATA_A_F16", "1"}, {"KEPLER_B64_SUPPORT", "1"}, {"B_TYPE", "float"}, {"B_TYPEV2", "vec2"}, {"B_TYPEV4", "vec4"}, {"D_TYPE", "float"}}));
     string_to_spv("mul_mat_vec_kepler_f16_activation64_subgroup", "mul_mat_vec.comp",
         merge_maps(base_dict, {{"DATA_A_F16", "1"}, {"KEPLER_B64_SUPPORT", "1"}, {"B_TYPE", "float"}, {"B_TYPEV2", "vec2"}, {"B_TYPEV4", "vec4"}, {"D_TYPE", "float"}, {"USE_SUBGROUP_ADD", "1"}}));
 
 
-    string_to_spv("mul_mat_vec_kepler_q8_0_wide_f32_f32", "mul_mat_vec.comp", merge_maps(base_dict, {{"DATA_A_Q8_0", "1"}, {"KEPLER_WIDE_RECHECK", "1"}, {"B_TYPE", "float"}, {"B_TYPEV2", "vec2"}, {"B_TYPEV4", "vec4"}, {"D_TYPE", "float"}}));
-    string_to_spv("mul_mat_vec_kepler_q8_0_wide_f32_f32_subgroup", "mul_mat_vec.comp", merge_maps(base_dict, {{"DATA_A_Q8_0", "1"}, {"KEPLER_WIDE_RECHECK", "1"}, {"B_TYPE", "float"}, {"B_TYPEV2", "vec2"}, {"B_TYPEV4", "vec4"}, {"D_TYPE", "float"}, {"USE_SUBGROUP_ADD", "1"}}));
+    string_to_spv("mul_mat_vec_kepler_q8_0_wide_f32_f32", "mul_mat_vec.comp", merge_maps(base_dict, {{"DATA_A_Q8_0", "1"}, {"KEPLER_Q8_WIDE", "1"}, {"B_TYPE", "float"}, {"B_TYPEV2", "vec2"}, {"B_TYPEV4", "vec4"}, {"D_TYPE", "float"}}));
+    string_to_spv("mul_mat_vec_kepler_q8_0_wide_f32_f32_subgroup", "mul_mat_vec.comp", merge_maps(base_dict, {{"DATA_A_Q8_0", "1"}, {"KEPLER_Q8_WIDE", "1"}, {"B_TYPE", "float"}, {"B_TYPEV2", "vec2"}, {"B_TYPEV4", "vec4"}, {"D_TYPE", "float"}, {"USE_SUBGROUP_ADD", "1"}}));
 
     for (const auto& tname : type_names) {
         // mul mat vec

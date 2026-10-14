@@ -20,7 +20,7 @@ layout(constant_id = 3) const uint KEPLER_DOT_MODE = 0;
 #endif
 
 
-#if defined(DATA_A_Q8_0) && defined(KEPLER_WIDE_RECHECK)
+#if defined(DATA_A_Q8_0) && defined(KEPLER_Q8_WIDE)
 layout(binding = 0) readonly buffer AAlignedWords { uint data_a_words[]; };
 #endif
 
@@ -96,19 +96,14 @@ void iter(inout FLOAT_TYPE temp[NUM_COLS][NUM_ROWS], const uint first_row, const
 
 #if K_PER_ITER == 8
             vec4 v, v2;
-#if defined(DATA_A_Q8_0) && defined(KEPLER_WIDE_RECHECK)
-            if (KEPLER_DOT_MODE == 5 || KEPLER_DOT_MODE == 6) {
+#if defined(DATA_A_Q8_0) && defined(KEPLER_Q8_WIDE)
+            if (KEPLER_DOT_MODE == 6) {
                 const uint byte_pos = 34u * (a_offset + ib) + 2u + iqs;
                 const uint word_pos = byte_pos >> 2;
                 const uint half_shift = (byte_pos & 2u) >> 1;
                 const uint w0 = data_a_words[word_pos];
                 const uint w1 = data_a_words[word_pos + 1u];
-                uint last_word;
-                if (KEPLER_DOT_MODE == 5) {
-                    last_word = data_a_words[word_pos + 1u + half_shift];
-                } else {
-                    last_word = uint(data_a_packed16[a_offset + ib].qs[iqs/2 + 3u]);
-                }
+                const uint last_word = uint(data_a_packed16[a_offset + ib].qs[iqs/2 + 3u]);
                 const uint mask = 0u - half_shift;
                 const uint q0 = (w0 >> (16u * half_shift)) | ((w1 << 16u) & mask);
                 const uint q1 = (w1 >> (16u * half_shift)) | ((last_word << 16u) & mask);
@@ -130,33 +125,15 @@ void iter(inout FLOAT_TYPE temp[NUM_COLS][NUM_ROWS], const uint first_row, const
             // matrix multiplication
             FLOAT_TYPE rowtmp;
 #if defined(DATA_A_Q8_0)
-            if (KEPLER_DOT_MODE == 1) {
-                const FLOAT_TYPE s0 = dot(bv0, v);
-                const FLOAT_TYPE s1 = dot(bv1, v2);
-                rowtmp = s0 + s1;
-            } else if (KEPLER_DOT_MODE == 2) {
-                precise FLOAT_TYPE s0 = fma(bv0.x, v.x, fma(bv0.y, v.y, fma(bv0.z, v.z, bv0.w * v.w)));
-                precise FLOAT_TYPE s1 = fma(bv1.x, v2.x, fma(bv1.y, v2.y, fma(bv1.z, v2.z, bv1.w * v2.w)));
-                precise FLOAT_TYPE sum = s0 + s1;
-                rowtmp = sum;
-            } else if (KEPLER_DOT_MODE == 3
-#ifdef KEPLER_WIDE_RECHECK
-                       || KEPLER_DOT_MODE == 5 || KEPLER_DOT_MODE == 6
+            if (KEPLER_DOT_MODE == 3
+#ifdef KEPLER_Q8_WIDE
+                       || KEPLER_DOT_MODE == 6
 #endif
             ) {
                 precise FLOAT_TYPE s0 = fma(bv0.x, v.x, bv0.y * v.y);
                 precise FLOAT_TYPE s1 = fma(bv0.z, v.z, bv0.w * v.w);
                 precise FLOAT_TYPE s2 = fma(bv1.x, v2.x, bv1.y * v2.y);
                 precise FLOAT_TYPE s3 = fma(bv1.z, v2.z, bv1.w * v2.w);
-                precise FLOAT_TYPE sum = (s0 + s1) + (s2 + s3);
-                rowtmp = sum;
-            } else if (KEPLER_DOT_MODE == 4) {
-                precise vec4 p0 = bv0 * v;
-                precise vec4 p1 = bv1 * v2;
-                precise FLOAT_TYPE s0 = p0.x + p0.y;
-                precise FLOAT_TYPE s1 = p0.z + p0.w;
-                precise FLOAT_TYPE s2 = p1.x + p1.y;
-                precise FLOAT_TYPE s3 = p1.z + p1.w;
                 precise FLOAT_TYPE sum = (s0 + s1) + (s2 + s3);
                 rowtmp = sum;
             } else
@@ -229,8 +206,8 @@ void iter_aligned_nonquant(inout FLOAT_TYPE temp[NUM_COLS][NUM_ROWS], const uint
                 } else
 #endif
                 {
-                const uint word = (a_offset + ib) / 2;
-                v = vec4(unpackHalf2x16(data_a_u32[word]), unpackHalf2x16(data_a_u32[word + 1]));
+                    const uint word = (a_offset + ib) / 2;
+                    v = vec4(unpackHalf2x16(data_a_u32[word]), unpackHalf2x16(data_a_u32[word + 1]));
                 }
             } else {
                 v = dequantize4_2aligned(ib, iqs, a_offset);

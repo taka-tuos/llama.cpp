@@ -2913,7 +2913,7 @@ void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {
 #define OCP_DMMV_DATA(NAME, REDUC) NAME ## _data[REDUC]
 #endif
 
-    if (device->vendor_id == VK_VENDOR_ID_NVIDIA && device->properties.deviceID == 0x1022) {
+    if (device->kepler_tuning) {
         const shader_reduction_mode reduction = use_subgroups ? SHADER_REDUCTION_MODE_HYBRID : SHADER_REDUCTION_MODE_SHMEM;
         ggml_vk_create_pipeline(device, device->pipeline_kepler_ffn_q8_dot4, "mul_mat_vec_kepler_q8_0_dot4_rows2",
                                 arr_dmmv_q8_0_f32_f32_len[reduction], arr_dmmv_q8_0_f32_f32_data[reduction], "main",
@@ -4200,6 +4200,27 @@ vk_device ggml_vk_get_device(size_t idx) {
         device->properties = props2.properties;
         device->vendor_id = device->properties.vendorID;
         device->driver_id = driver_props.driverID;
+
+        const std::string kepler_name(device->properties.deviceName.data());
+        bool kepler_target = false;
+        if (device->vendor_id == VK_VENDOR_ID_NVIDIA && device->driver_id == vk::DriverId::eMesaNvk) {
+            for (const char * chip : {"GK110", "GK110B", "GK210"}) {
+                if (kepler_name == std::string("NVK ") + chip ||
+                    kepler_name.find(std::string("(NVK ") + chip + ")") != std::string::npos) {
+                    kepler_target = true;
+                }
+            }
+        }
+        const char * kepler_option = getenv("GGML_VK_KEPLER");
+        const char * kepler_wide_option = getenv("GGML_VK_KEPLER_WIDE");
+        device->kepler_tuning = kepler_target && (!kepler_option || strcmp(kepler_option, "0") != 0);
+        device->kepler_wide_load = device->kepler_tuning && (!kepler_wide_option || strcmp(kepler_wide_option, "0") != 0);
+        device->kepler_trace = getenv("GGML_VK_KEPLER_TRACE") != nullptr;
+        if (kepler_target || device->kepler_trace) {
+            GGML_LOG_INFO("ggml_vulkan: Kepler tuning %s, Q8 wide %s on %s (device 0x%04x)\n",
+                          device->kepler_tuning ? "on" : "off", device->kepler_wide_load ? "on" : "off",
+                          kepler_name.c_str(), device->properties.deviceID);
+        }
 
         if (device->driver_id == vk::DriverId::eMoltenvk) {
             // Disable external_memory_host until https://github.com/KhronosGroup/MoltenVK/pull/2622
@@ -5623,15 +5644,12 @@ static vk_pipeline ggml_vk_get_dequantize_mul_mat_vec(ggml_backend_vk_context * 
         }
     }
 
-    if (ctx->device->vendor_id == VK_VENDOR_ID_NVIDIA &&
-        ctx->device->properties.deviceID == 0x1022 && num_cols == 1) {
+    if (ctx->device->kepler_tuning && num_cols == 1) {
         if (a_type == GGML_TYPE_Q8_0) {
             dmmv_wg = DMMV_WG_SIZE_LARGE;
         } else if ((a_type == GGML_TYPE_Q4_0 || a_type == GGML_TYPE_Q4_K) && b_type == GGML_TYPE_F32) {
-            if (k == 2048 && m == 8192) {
-                dmmv_wg = DMMV_WG_SIZE_MEDIUM;
-            } else if (k == 8192 && m == 2048) {
-                dmmv_wg = DMMV_WG_SIZE_LARGE;
+            if (k >= 1024) {
+                dmmv_wg = k <= 4096 ? DMMV_WG_SIZE_MEDIUM : DMMV_WG_SIZE_LARGE;
             }
         } else if (a_type == GGML_TYPE_F16 || a_type == GGML_TYPE_F32) {
             dmmv_wg = DMMV_WG_SIZE_MEDIUM;
@@ -6752,38 +6770,35 @@ static void ggml_vk_mul_mat_vec_q_f16(ggml_backend_vk_context * ctx, vk_context&
         quantize_y = false;
     }
 
-    if (!quantize_y && !swap_inputs && src0->type == GGML_TYPE_Q8_0 && src1->type == GGML_TYPE_F32 &&
-        ctx->device->vendor_id == VK_VENDOR_ID_NVIDIA && ctx->device->properties.deviceID == 0x1022 &&
-        ne11 == 1 && ne02 == 1 && ne03 == 1 && ne12 == 1 && ne13 == 1 &&
-        ((ne00 == 2048 && ne20 == 8192) || (ne00 == 8192 && ne20 == 2048)) &&
+    const bool kepler_matvec = !quantize_y && !swap_inputs && ctx->device->kepler_tuning &&
+        src1->type == GGML_TYPE_F32 && ne11 == 1 && ne02 == 1 && ne03 == 1 && ne12 == 1 && ne13 == 1 &&
+        ne00 > 0 && ne20 > 0 && ne20 <= UINT32_MAX / ne00 &&
         ggml_is_contiguous(src0) && ggml_is_contiguous(src1) && ggml_is_contiguous(dst) &&
-        reinterpret_cast<uintptr_t>(src0->data) % 8 == 0 && reinterpret_cast<uintptr_t>(src1->data) % 16 == 0) {
-        dmmv = ne00 == 8192 ? ctx->device->pipeline_kepler_ffn_q8_wide_down : ctx->device->pipeline_kepler_ffn_q8_dot4;
+        reinterpret_cast<uintptr_t>(src0->data) % 8 == 0 && reinterpret_cast<uintptr_t>(src1->data) % 16 == 0 &&
+        ggml_nbytes(src0) <= ctx->device->properties.limits.maxStorageBufferRange &&
+        ggml_nbytes(src1) <= ctx->device->properties.limits.maxStorageBufferRange &&
+        ggml_nbytes(dst) <= ctx->device->properties.limits.maxStorageBufferRange;
+    if (kepler_matvec && src0->type == GGML_TYPE_Q8_0 && ne00 % 32 == 0) {
+        const bool wide = ctx->device->kepler_wide_load && ne00 >= 4096 && ne20 < ne00;
+        dmmv = wide ? ctx->device->pipeline_kepler_ffn_q8_wide_down : ctx->device->pipeline_kepler_ffn_q8_dot4;
     }
-
-    if (!quantize_y && !swap_inputs && src0->type == GGML_TYPE_F16 && src1->type == GGML_TYPE_F32 &&
-        ctx->device->vendor_id == VK_VENDOR_ID_NVIDIA && ctx->device->properties.deviceID == 0x1022 &&
-        ne11 == 1 && ne02 == 1 && ne03 == 1 && ne12 == 1 && ne13 == 1 &&
-        ((ne00 == 2048 && (ne20 == 8192 || ne20 == 2048)) || (ne00 == 8192 && ne20 == 2048)) &&
-        ggml_is_contiguous(src0) && ggml_is_contiguous(src1) && ggml_is_contiguous(dst) &&
-        reinterpret_cast<uintptr_t>(src0->data) % 8 == 0 && reinterpret_cast<uintptr_t>(src1->data) % 16 == 0) {
+    if (kepler_matvec && src0->type == GGML_TYPE_F16 && ne00 % 4 == 0) {
         dmmv = ctx->device->pipeline_kepler_ffn_f16_packed32;
-        // Limit activation64 to FFN; projection keeps the fixed packed32 control.
         if (ctx->device->shader_int64 && ne00 != ne20) {
             dmmv = ctx->device->pipeline_kepler_ffn_f16_activation64;
-            if (ne00 == 2048 && ne20 == 8192) {
+            if (ne00 >= 1024 && ne20 > ne00) {
                 dmmv = ctx->device->pipeline_kepler_ffn_f16_activation64_rows4;
             }
         }
     }
-
-    if (!quantize_y && !swap_inputs && src0->type == GGML_TYPE_Q4_0 && src1->type == GGML_TYPE_F32 &&
-        ctx->device->vendor_id == VK_VENDOR_ID_NVIDIA && ctx->device->properties.deviceID == 0x1022 &&
-        ne11 == 1 && ne02 == 1 && ne03 == 1 && ne12 == 1 && ne13 == 1 &&
-        (ne00 == 2048 && ne20 == 8192) &&
-        ggml_is_contiguous(src0) && ggml_is_contiguous(src1) && ggml_is_contiguous(dst) &&
-        reinterpret_cast<uintptr_t>(src0->data) % 8 == 0 && reinterpret_cast<uintptr_t>(src1->data) % 16 == 0) {
+    if (kepler_matvec && src0->type == GGML_TYPE_Q4_0 && ne00 >= 1024 && ne00 <= 4096 &&
+        ne00 % 32 == 0 && ne20 > ne00) {
         dmmv = ctx->device->pipeline_kepler_ffn_q4_0_rows4;
+    }
+    if (ctx->device->kepler_trace) {
+        GGML_LOG_INFO("ggml_vulkan: Kepler matvec type=%s K=%llu M=%llu N=%llu path=%s\n",
+                      ggml_type_name(src0->type), static_cast<unsigned long long>(ne00),
+                      static_cast<unsigned long long>(ne20), static_cast<unsigned long long>(ne11), dmmv->name.c_str());
     }
 
     if (quantize_y) {

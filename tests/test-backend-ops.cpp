@@ -5329,11 +5329,11 @@ struct test_mul_mat : public test_case {
     }
 };
 
-// Experiment-only hot-shape reference checks for row/group changes.
-struct test_kepler_rows_check : public test_mul_mat {
+// Check contiguous offset views and fused bias on the tuned matvec paths.
+struct test_kepler_matvec_check : public test_mul_mat {
     const bool offset_view;
     const bool add_bias;
-    test_kepler_rows_check(ggml_type type, int64_t rows, int64_t cols, bool offset, bool bias)
+    test_kepler_matvec_check(ggml_type type, int64_t rows, int64_t cols, bool offset, bool bias)
         : test_mul_mat(type, GGML_TYPE_F32, rows, 1, cols, {1, 1}, {1, 1}),
           offset_view(offset), add_bias(bias) {}
     std::string vars() override {
@@ -5364,7 +5364,7 @@ struct test_kepler_rows_check : public test_mul_mat {
         return out;
     }
     bool run_whole_graph() override { return true; }
-    std::string op_desc(ggml_tensor *) override { return "KEPLER_ROWS_CHECK"; }
+    std::string op_desc(ggml_tensor *) override { return "KEPLER_MATVEC_CHECK"; }
 };
 
 // GGML_HINT_SRC0_IS_HADAMARD
@@ -9673,11 +9673,11 @@ static const ggml_type other_types[] = {
 static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
     std::vector<std::unique_ptr<test_case>> test_cases;
     std::default_random_engine rng(0);
-    // Keep these explicit PoC checks selectable without broadening normal perf.
+    // Keep matvec view and fusion checks out of the perf case list.
     for (ggml_type type : {GGML_TYPE_Q8_0, GGML_TYPE_F16, GGML_TYPE_Q4_0, GGML_TYPE_Q4_K}) {
-        for (const auto shape : {std::array<int64_t, 2>{8192, 2048}, std::array<int64_t, 2>{2048, 8192}}) {
-            test_cases.emplace_back(new test_kepler_rows_check(type, shape[0], shape[1], true, false));
-            test_cases.emplace_back(new test_kepler_rows_check(type, shape[0], shape[1], false, true));
+        for (const auto shape : {std::array<int64_t, 2>{8192, 2048}, std::array<int64_t, 2>{2048, 8192}, std::array<int64_t, 2>{33, 1536}, std::array<int64_t, 2>{5, 256}, std::array<int64_t, 2>{33, 4096}}) {
+            test_cases.emplace_back(new test_kepler_matvec_check(type, shape[0], shape[1], true, false));
+            test_cases.emplace_back(new test_kepler_matvec_check(type, shape[0], shape[1], false, true));
         }
     }
 

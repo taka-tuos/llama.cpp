@@ -814,6 +814,9 @@ struct vk_device_struct {
     vk_pipeline pipeline_dequant[GGML_TYPE_COUNT];
     vk_pipeline pipeline_dequant_transpose[GGML_TYPE_COUNT]; // fused dequant+transpose for FA quant-KV
     vk_pipeline pipeline_dequant_mul_mat_vec_f32_f32[DMMV_WG_SIZE_COUNT][GGML_TYPE_COUNT][mul_mat_vec_max_cols];
+    bool kepler_tuning = false;
+    bool kepler_wide_load = false;
+    bool kepler_trace = false;
     vk_pipeline pipeline_kepler_ffn_q8_dot4;
     vk_pipeline pipeline_kepler_ffn_q8_wide_down;
     vk_pipeline pipeline_kepler_ffn_f16_packed32;
