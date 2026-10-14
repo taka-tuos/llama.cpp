@@ -7,7 +7,11 @@
 
 layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
 
+#if defined(DATA_A_F16)
+layout(constant_id = 3) const bool KEPLER_PACKED32 = false;
+#else
 layout(constant_id = 3) const uint KEPLER_DOT_MODE = 0;
+#endif
 
 #if !defined(DATA_A_F32) && !defined(DATA_A_F16) && !defined(DATA_A_BF16)
 #define K_PER_ITER 8
@@ -18,6 +22,17 @@ layout(constant_id = 3) const uint KEPLER_DOT_MODE = 0;
 
 #if defined(DATA_A_Q8_0) && defined(KEPLER_WIDE_RECHECK)
 layout(binding = 0) readonly buffer AAlignedWords { uint data_a_words[]; };
+#endif
+
+#if defined(DATA_A_F16)
+#ifdef KEPLER_B64_SUPPORT
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+layout(constant_id = 4) const bool KEPLER_ACTIVATION64 = false;
+layout(constant_id = 5) const bool KEPLER_WEIGHT64 = false;
+layout(binding = 0, std430) readonly buffer AWords64 { uint64_t data_a_u64[]; };
+layout(binding = 1, std430) readonly buffer BWords64 { uint64_t data_b_u64[]; };
+#endif
+layout(binding = 0, std430) readonly buffer APacked32 { uint data_a_u32[]; };
 #endif
 
 uint a_offset, b_offset, d_offset, y_offset;
@@ -186,14 +201,43 @@ void iter_aligned_nonquant(inout FLOAT_TYPE temp[NUM_COLS][NUM_ROWS], const uint
         const uint iqs = 0; // quant index
         const uint iybs = col; // y block start index
 
-        const vec4 b = data_b_v4[(j*p.batch_stride_b + b_offset + iybs + iqs) / 4];
+        vec4 b;
+#if defined(DATA_A_F16) && defined(KEPLER_B64_SUPPORT)
+        if (KEPLER_ACTIVATION64) {
+            const uint word = (j*p.batch_stride_b + b_offset + iybs + iqs) / 2;
+            const uvec2 b01 = unpackUint2x32(data_b_u64[word]);
+            const uvec2 b23 = unpackUint2x32(data_b_u64[word + 1]);
+            b = uintBitsToFloat(uvec4(b01, b23));
+        } else
+#endif
+        {
+            b = data_b_v4[(j*p.batch_stride_b + b_offset + iybs + iqs) / 4];
+        }
 
         uint ibi = first_row*p.ncols;
         [[unroll]] for (uint n = 0; n < num_rows; ++n) {
             const uint ib = (ibi + col)/QUANT_K; // block index
             ibi += p.ncols;
 
+#if defined(DATA_A_F16)
+            vec4 v;
+            if (KEPLER_PACKED32) {
+#ifdef KEPLER_B64_SUPPORT
+                if (KEPLER_WEIGHT64) {
+                    const uvec2 words = unpackUint2x32(data_a_u64[(a_offset + ib) / 4]);
+                    v = vec4(unpackHalf2x16(words.x), unpackHalf2x16(words.y));
+                } else
+#endif
+                {
+                const uint word = (a_offset + ib) / 2;
+                v = vec4(unpackHalf2x16(data_a_u32[word]), unpackHalf2x16(data_a_u32[word + 1]));
+                }
+            } else {
+                v = dequantize4_2aligned(ib, iqs, a_offset);
+            }
+#else
             const vec4 v = dequantize4_2aligned(ib, iqs, a_offset);
+#endif
 
             // matrix multiplication
             temp[j][n] += dot(v, b);

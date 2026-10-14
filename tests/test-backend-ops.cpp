@@ -9674,7 +9674,7 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
     std::vector<std::unique_ptr<test_case>> test_cases;
     std::default_random_engine rng(0);
     // Keep these explicit PoC checks selectable without broadening normal perf.
-    for (ggml_type type : {GGML_TYPE_Q8_0, GGML_TYPE_F16}) {
+    for (ggml_type type : {GGML_TYPE_Q8_0, GGML_TYPE_F16, GGML_TYPE_Q4_0, GGML_TYPE_Q4_K}) {
         for (const auto shape : {std::array<int64_t, 2>{8192, 2048}, std::array<int64_t, 2>{2048, 8192}}) {
             test_cases.emplace_back(new test_kepler_rows_check(type, shape[0], shape[1], true, false));
             test_cases.emplace_back(new test_kepler_rows_check(type, shape[0], shape[1], false, true));

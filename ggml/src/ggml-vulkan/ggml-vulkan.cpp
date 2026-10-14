@@ -2924,6 +2924,26 @@ void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {
                                 use_subgroups ? mul_mat_vec_kepler_q8_0_wide_f32_f32_subgroup_data : mul_mat_vec_kepler_q8_0_wide_f32_f32_data, "main",
                                 mul_mat_vec_num_bindings, sizeof(vk_mat_vec_push_constants), {2, 1, 1},
                                 {subgroup_size * 4, 2, 1, 6}, 1, true, use_subgroups, force_subgroup_size);
+        ggml_vk_create_pipeline(device, device->pipeline_kepler_ffn_f16_packed32, "mul_mat_vec_kepler_f16_packed32",
+                                arr_dmmv_f16_f32_f32_len[reduction], arr_dmmv_f16_f32_f32_data[reduction], "main",
+                                mul_mat_vec_num_bindings, sizeof(vk_mat_vec_push_constants), {2, 1, 1},
+                                {subgroup_size * 2, 2, 1, 1}, 1, false, use_subgroups, force_subgroup_size);
+        if (device->shader_int64) {
+            ggml_vk_create_pipeline(device, device->pipeline_kepler_ffn_f16_activation64, "mul_mat_vec_kepler_f16_activation64_weight64",
+                                    use_subgroups ? mul_mat_vec_kepler_f16_activation64_subgroup_len : mul_mat_vec_kepler_f16_activation64_len,
+                                    use_subgroups ? mul_mat_vec_kepler_f16_activation64_subgroup_data : mul_mat_vec_kepler_f16_activation64_data, "main",
+                                    mul_mat_vec_num_bindings, sizeof(vk_mat_vec_push_constants), {2, 1, 1},
+                                    {subgroup_size * 2, 2, 1, 1, 1, 1}, 1, false, use_subgroups, force_subgroup_size);
+            ggml_vk_create_pipeline(device, device->pipeline_kepler_ffn_f16_activation64_rows4, "mul_mat_vec_kepler_f16_activation64_weight64_rows4",
+                                    use_subgroups ? mul_mat_vec_kepler_f16_activation64_subgroup_len : mul_mat_vec_kepler_f16_activation64_len,
+                                    use_subgroups ? mul_mat_vec_kepler_f16_activation64_subgroup_data : mul_mat_vec_kepler_f16_activation64_data, "main",
+                                    mul_mat_vec_num_bindings, sizeof(vk_mat_vec_push_constants), {4, 1, 1},
+                                    {subgroup_size * 2, 4, 1, 1, 1, 1}, 1, false, use_subgroups, force_subgroup_size);
+        }
+        ggml_vk_create_pipeline(device, device->pipeline_kepler_ffn_q4_0_rows4, "mul_mat_vec_kepler_q4_0_rows4_up",
+                                arr_dmmv_q4_0_f32_f32_len[reduction], arr_dmmv_q4_0_f32_f32_data[reduction], "main",
+                                mul_mat_vec_num_bindings, sizeof(vk_mat_vec_push_constants), {4, 1, 1},
+                                {subgroup_size * 2, 4, 1}, 1, true, use_subgroups, force_subgroup_size);
     }
 
     for (uint32_t w = 0; w < DMMV_WG_SIZE_COUNT; ++w) {
@@ -5607,6 +5627,12 @@ static vk_pipeline ggml_vk_get_dequantize_mul_mat_vec(ggml_backend_vk_context * 
         ctx->device->properties.deviceID == 0x1022 && num_cols == 1) {
         if (a_type == GGML_TYPE_Q8_0) {
             dmmv_wg = DMMV_WG_SIZE_LARGE;
+        } else if ((a_type == GGML_TYPE_Q4_0 || a_type == GGML_TYPE_Q4_K) && b_type == GGML_TYPE_F32) {
+            if (k == 2048 && m == 8192) {
+                dmmv_wg = DMMV_WG_SIZE_MEDIUM;
+            } else if (k == 8192 && m == 2048) {
+                dmmv_wg = DMMV_WG_SIZE_LARGE;
+            }
         } else if (a_type == GGML_TYPE_F16 || a_type == GGML_TYPE_F32) {
             dmmv_wg = DMMV_WG_SIZE_MEDIUM;
         }
@@ -6733,6 +6759,31 @@ static void ggml_vk_mul_mat_vec_q_f16(ggml_backend_vk_context * ctx, vk_context&
         ggml_is_contiguous(src0) && ggml_is_contiguous(src1) && ggml_is_contiguous(dst) &&
         reinterpret_cast<uintptr_t>(src0->data) % 8 == 0 && reinterpret_cast<uintptr_t>(src1->data) % 16 == 0) {
         dmmv = ne00 == 8192 ? ctx->device->pipeline_kepler_ffn_q8_wide_down : ctx->device->pipeline_kepler_ffn_q8_dot4;
+    }
+
+    if (!quantize_y && !swap_inputs && src0->type == GGML_TYPE_F16 && src1->type == GGML_TYPE_F32 &&
+        ctx->device->vendor_id == VK_VENDOR_ID_NVIDIA && ctx->device->properties.deviceID == 0x1022 &&
+        ne11 == 1 && ne02 == 1 && ne03 == 1 && ne12 == 1 && ne13 == 1 &&
+        ((ne00 == 2048 && (ne20 == 8192 || ne20 == 2048)) || (ne00 == 8192 && ne20 == 2048)) &&
+        ggml_is_contiguous(src0) && ggml_is_contiguous(src1) && ggml_is_contiguous(dst) &&
+        reinterpret_cast<uintptr_t>(src0->data) % 8 == 0 && reinterpret_cast<uintptr_t>(src1->data) % 16 == 0) {
+        dmmv = ctx->device->pipeline_kepler_ffn_f16_packed32;
+        // Limit activation64 to FFN; projection keeps the fixed packed32 control.
+        if (ctx->device->shader_int64 && ne00 != ne20) {
+            dmmv = ctx->device->pipeline_kepler_ffn_f16_activation64;
+            if (ne00 == 2048 && ne20 == 8192) {
+                dmmv = ctx->device->pipeline_kepler_ffn_f16_activation64_rows4;
+            }
+        }
+    }
+
+    if (!quantize_y && !swap_inputs && src0->type == GGML_TYPE_Q4_0 && src1->type == GGML_TYPE_F32 &&
+        ctx->device->vendor_id == VK_VENDOR_ID_NVIDIA && ctx->device->properties.deviceID == 0x1022 &&
+        ne11 == 1 && ne02 == 1 && ne03 == 1 && ne12 == 1 && ne13 == 1 &&
+        (ne00 == 2048 && ne20 == 8192) &&
+        ggml_is_contiguous(src0) && ggml_is_contiguous(src1) && ggml_is_contiguous(dst) &&
+        reinterpret_cast<uintptr_t>(src0->data) % 8 == 0 && reinterpret_cast<uintptr_t>(src1->data) % 16 == 0) {
+        dmmv = ctx->device->pipeline_kepler_ffn_q4_0_rows4;
     }
 
     if (quantize_y) {
