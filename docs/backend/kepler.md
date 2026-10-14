@@ -67,6 +67,25 @@ The script checks small operators against CPU and records a logger-free tg128 AB
 
 Share the record directory plus GPU model/PCI ID, Mesa version and ICD, PCIe link, available clocks, temperature and any throttling/ECC information. Use `unavailable` for readings you cannot obtain. Report correctness failures before interpreting speed. A small or inconsistent change is a useful result; one fast run alone does not establish an improvement.
 
+## K20c validation on 2026-10-14
+
+Release build, stock Mesa commit above, SmolLM2-1.7B-Instruct, cache disabled, no perf/trace logger. Each format uses its own unchanged GGUF. These are tg128 ABBA medians with two independent processes per side, complete 25-layer offload, context256, one sequence, F16 KV and flash attention off. OFF and ON use the same fork binary; OFF restores upstream-style dispatch. This is not a comparison with a separately rebuilt upstream binary.
+
+| Format | OFF tokens/s | ON tokens/s | Throughput change |
+|---|---:|---:|---:|
+| Q8_0 | 11.646 | 21.164 | +81.73% |
+| F16 | 8.426 | 18.467 | +119.16% |
+| Q4_0 | 16.947 | 24.649 | +45.45% |
+| Q4_K_M | 14.716 | 20.127 | +36.77% |
+
+The ON samples were above the OFF range for all four formats. The result is specific to this GPU, Mesa, models and decode configuration. Full model profiling was not repeated, so this table does not assign gains to individual operations or claim DRAM bandwidth. A separate comparison against the integrated exact-shape work branch found additional gains of Q8_0 +6.17%, F16 +3.05%, Q4_0 +12.51% and Q4_K_M +9.32% from wider dispatch; those percentages must not be added to the table above.
+
+CPU reference checks passed: expanded operators39/39, original operators29/29, aligned offset/bias40/40, OFF39/39 and wide-disabled39/39. Three strided quant cases were unsupported by the existing backend and skipped. Sixteen representative native shapes (K1024/1536/4096/12288) reduced synchronized host time by about18-55% versus exact-shape dispatch. GPRs stayed at32 for F16,40 for Q8/Q4_0 and48 for Q4_K with allocator spill/fill0. These static resource counts do not establish the bottleneck.
+
+An initial test-file fixture left the tail of a strided F16 backing uninitialized, yielding NaN on both CPU and GPU; its backing initialization was corrected. A deliberately descriptor-misaligned view aborted with tuning ON and OFF; that unsupported fixture was removed and the alignment restriction is stated above. The valid final tests and public smoke script passed. GK110B/GK210 hardware, long contexts and MoE remain unmeasured.
+
+[Machine-readable validation summary](kepler-validation.json) includes samples, medians, representative-shape host timings and the known initial failures. Full raw logs, complete patches and binary/driver hashes are kept in the companion preparation record.
+
 ## Scope and provenance
 
 The fork combines the measured Q8 dot4/rows2/down-wide, F16 packed/64-bit loads/up rows4, and Q4_0 up rows4 with Q4_K WG hints. Q4_0 dot4, Q4_K smin4, Q4_K rows4 and load hoist are not enabled: model gains were absent, weak or negative. F16 and Q8 speedups from separate experiments must not be summed into a total claim.

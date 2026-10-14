@@ -1,0 +1,657 @@
+{
+  "date": "2026-10-14",
+  "gpu": "Tesla K20c / GK110 / 10de:1022 / nouveau",
+  "llama_base": "4413a192410fad1f054e9216114087a3e01527a0",
+  "Mesa": "76b9372c4e5d186f57d22d3a4f95dd1c5e04ece2",
+  "source_code_commit": "6e77917c8",
+  "conditions": "tg128/r1/p0/t8/b32/ub32/ctk-f16/ctv-f16/fa-off/ngl99; full offload/context256/sequence1; stock Mesa; cache disabled; no logger",
+  "timing": "decode tokens/s from host time; expanded perf synchronized host us/op, not GPU timestamp",
+  "unknowns": "actual clock/pstate/VRAM clock/ECC/throttling unavailable",
+  "same_binary_on_off": {
+    "F16": {
+      "0": {
+        "samples": [
+          8.452932,
+          8.399103
+        ],
+        "median": 8.4260175,
+        "range": [
+          8.399103,
+          8.452932
+        ]
+      },
+      "1": {
+        "samples": [
+          18.465074,
+          18.468663
+        ],
+        "median": 18.4668685,
+        "range": [
+          18.465074,
+          18.468663
+        ]
+      },
+      "throughput_change_percent": 119.1648486369747
+    },
+    "Q4_0": {
+      "0": {
+        "samples": [
+          16.956585,
+          16.936539
+        ],
+        "median": 16.946562,
+        "range": [
+          16.936539,
+          16.956585
+        ]
+      },
+      "1": {
+        "samples": [
+          24.668759,
+          24.630237
+        ],
+        "median": 24.649498,
+        "range": [
+          24.630237,
+          24.668759
+        ]
+      },
+      "throughput_change_percent": 45.45426972149278
+    },
+    "Q4_K_M": {
+      "0": {
+        "samples": [
+          14.78707,
+          14.644197
+        ],
+        "median": 14.7156335,
+        "range": [
+          14.644197,
+          14.78707
+        ]
+      },
+      "1": {
+        "samples": [
+          20.126952,
+          20.12673
+        ],
+        "median": 20.126841,
+        "range": [
+          20.12673,
+          20.126952
+        ]
+      },
+      "throughput_change_percent": 36.771828409561834
+    },
+    "Q8_0": {
+      "0": {
+        "samples": [
+          11.642947,
+          11.649447
+        ],
+        "median": 11.646197,
+        "range": [
+          11.642947,
+          11.649447
+        ]
+      },
+      "1": {
+        "samples": [
+          21.17906,
+          21.149578
+        ],
+        "median": 21.164319,
+        "range": [
+          21.149578,
+          21.17906
+        ]
+      },
+      "throughput_change_percent": 81.7272969021561,
+      "source": "public-smoke-q8 script execution"
+    }
+  },
+  "work_vs_generalized": {
+    "Q8_0": {
+      "work": {
+        "samples": [
+          20.280113,
+          20.266299
+        ],
+        "median": 20.273206000000002,
+        "range": [
+          20.266299,
+          20.280113
+        ]
+      },
+      "public": {
+        "samples": [
+          21.546861,
+          21.502818
+        ],
+        "median": 21.5248395,
+        "range": [
+          21.502818,
+          21.546861
+        ]
+      },
+      "throughput_change_percent": 6.17383111482217
+    },
+    "F16": {
+      "work": {
+        "samples": [
+          17.832323,
+          17.773795
+        ],
+        "median": 17.803058999999998,
+        "range": [
+          17.773795,
+          17.832323
+        ]
+      },
+      "public": {
+        "samples": [
+          18.199607,
+          18.493703
+        ],
+        "median": 18.346655,
+        "range": [
+          18.199607,
+          18.493703
+        ]
+      },
+      "throughput_change_percent": 3.0533853760749796
+    },
+    "Q4_0": {
+      "work": {
+        "samples": [
+          21.958681,
+          21.876031
+        ],
+        "median": 21.917355999999998,
+        "range": [
+          21.876031,
+          21.958681
+        ]
+      },
+      "public": {
+        "samples": [
+          24.705011,
+          24.612547
+        ],
+        "median": 24.658779,
+        "range": [
+          24.612547,
+          24.705011
+        ]
+      },
+      "throughput_change_percent": 12.508000508820505
+    },
+    "Q4_K_M": {
+      "work": {
+        "samples": [
+          18.39079,
+          18.625926
+        ],
+        "median": 18.508358,
+        "range": [
+          18.39079,
+          18.625926
+        ]
+      },
+      "public": {
+        "samples": [
+          20.291525,
+          20.174371
+        ],
+        "median": 20.232948,
+        "range": [
+          20.174371,
+          20.291525
+        ]
+      },
+      "throughput_change_percent": 9.317898432697259
+    }
+  },
+  "representative_shapes": {
+    "v1_t1_k1024_m4096_n1_batch1_pad0": {
+      "work": {
+        "samples": [
+          202.4,
+          201.17
+        ],
+        "median": 201.785,
+        "range": [
+          201.17,
+          202.4
+        ]
+      },
+      "public": {
+        "samples": [
+          126.12,
+          131.14
+        ],
+        "median": 128.63,
+        "range": [
+          126.12,
+          131.14
+        ]
+      },
+      "host_time_change_percent": -36.253933642242984
+    },
+    "v1_t1_k1536_m6144_n1_batch1_pad0": {
+      "work": {
+        "samples": [
+          392.42,
+          391.83
+        ],
+        "median": 392.125,
+        "range": [
+          391.83,
+          392.42
+        ]
+      },
+      "public": {
+        "samples": [
+          251.02,
+          251.62
+        ],
+        "median": 251.32,
+        "range": [
+          251.02,
+          251.62
+        ]
+      },
+      "host_time_change_percent": -35.908192540643924
+    },
+    "v1_t1_k4096_m1536_n1_batch1_pad0": {
+      "work": {
+        "samples": [
+          243.18,
+          242.97
+        ],
+        "median": 243.075,
+        "range": [
+          242.97,
+          243.18
+        ]
+      },
+      "public": {
+        "samples": [
+          167.76,
+          168.54
+        ],
+        "median": 168.14999999999998,
+        "range": [
+          167.76,
+          168.54
+        ]
+      },
+      "host_time_change_percent": -30.823819808701025
+    },
+    "v1_t1_k12288_m1536_n1_batch1_pad0": {
+      "work": {
+        "samples": [
+          648.84,
+          648.21
+        ],
+        "median": 648.5250000000001,
+        "range": [
+          648.21,
+          648.84
+        ]
+      },
+      "public": {
+        "samples": [
+          439.34,
+          439.49
+        ],
+        "median": 439.41499999999996,
+        "range": [
+          439.34,
+          439.49
+        ]
+      },
+      "host_time_change_percent": -32.24393816737984
+    },
+    "v1_t8_k1024_m4096_n1_batch1_pad0": {
+      "work": {
+        "samples": [
+          173.69,
+          172.7
+        ],
+        "median": 173.195,
+        "range": [
+          172.7,
+          173.69
+        ]
+      },
+      "public": {
+        "samples": [
+          140.64,
+          141.35
+        ],
+        "median": 140.995,
+        "range": [
+          140.64,
+          141.35
+        ]
+      },
+      "host_time_change_percent": -18.591760732122744
+    },
+    "v1_t8_k1536_m6144_n1_batch1_pad0": {
+      "work": {
+        "samples": [
+          304.9,
+          304.44
+        ],
+        "median": 304.66999999999996,
+        "range": [
+          304.44,
+          304.9
+        ]
+      },
+      "public": {
+        "samples": [
+          249.16,
+          249.43
+        ],
+        "median": 249.29500000000002,
+        "range": [
+          249.16,
+          249.43
+        ]
+      },
+      "host_time_change_percent": -18.175402894935488
+    },
+    "v1_t8_k4096_m1536_n1_batch1_pad0": {
+      "work": {
+        "samples": [
+          158.66,
+          158.0
+        ],
+        "median": 158.32999999999998,
+        "range": [
+          158.0,
+          158.66
+        ]
+      },
+      "public": {
+        "samples": [
+          130.15,
+          130.81
+        ],
+        "median": 130.48000000000002,
+        "range": [
+          130.15,
+          130.81
+        ]
+      },
+      "host_time_change_percent": -17.589843996715704
+    },
+    "v1_t8_k12288_m1536_n1_batch1_pad0": {
+      "work": {
+        "samples": [
+          450.4,
+          449.12
+        ],
+        "median": 449.76,
+        "range": [
+          449.12,
+          450.4
+        ]
+      },
+      "public": {
+        "samples": [
+          326.49,
+          326.87
+        ],
+        "median": 326.68,
+        "range": [
+          326.49,
+          326.87
+        ]
+      },
+      "host_time_change_percent": -27.365706154393454
+    },
+    "v1_t2_k1024_m4096_n1_batch1_pad0": {
+      "work": {
+        "samples": [
+          146.86,
+          145.76
+        ],
+        "median": 146.31,
+        "range": [
+          145.76,
+          146.86
+        ]
+      },
+      "public": {
+        "samples": [
+          99.39,
+          103.23
+        ],
+        "median": 101.31,
+        "range": [
+          99.39,
+          103.23
+        ]
+      },
+      "host_time_change_percent": -30.756612671724415
+    },
+    "v1_t2_k1536_m6144_n1_batch1_pad0": {
+      "work": {
+        "samples": [
+          298.83,
+          298.04
+        ],
+        "median": 298.435,
+        "range": [
+          298.04,
+          298.83
+        ]
+      },
+      "public": {
+        "samples": [
+          187.72,
+          188.47
+        ],
+        "median": 188.095,
+        "range": [
+          187.72,
+          188.47
+        ]
+      },
+      "host_time_change_percent": -36.97287516544642
+    },
+    "v1_t2_k4096_m1536_n1_batch1_pad0": {
+      "work": {
+        "samples": [
+          191.89,
+          191.01
+        ],
+        "median": 191.45,
+        "range": [
+          191.01,
+          191.89
+        ]
+      },
+      "public": {
+        "samples": [
+          122.28,
+          123.04
+        ],
+        "median": 122.66,
+        "range": [
+          122.28,
+          123.04
+        ]
+      },
+      "host_time_change_percent": -35.9310524941238
+    },
+    "v1_t2_k12288_m1536_n1_batch1_pad0": {
+      "work": {
+        "samples": [
+          522.5,
+          521.62
+        ],
+        "median": 522.06,
+        "range": [
+          521.62,
+          522.5
+        ]
+      },
+      "public": {
+        "samples": [
+          270.62,
+          271.48
+        ],
+        "median": 271.05,
+        "range": [
+          270.62,
+          271.48
+        ]
+      },
+      "host_time_change_percent": -48.08068038156533
+    },
+    "v1_t12_k1024_m4096_n1_batch1_pad0": {
+      "work": {
+        "samples": [
+          156.71,
+          154.31
+        ],
+        "median": 155.51,
+        "range": [
+          154.31,
+          156.71
+        ]
+      },
+      "public": {
+        "samples": [
+          108.14,
+          111.03
+        ],
+        "median": 109.58500000000001,
+        "range": [
+          108.14,
+          111.03
+        ]
+      },
+      "host_time_change_percent": -29.531862902707218
+    },
+    "v1_t12_k1536_m6144_n1_batch1_pad0": {
+      "work": {
+        "samples": [
+          315.68,
+          314.61
+        ],
+        "median": 315.145,
+        "range": [
+          314.61,
+          315.68
+        ]
+      },
+      "public": {
+        "samples": [
+          246.15,
+          247.36
+        ],
+        "median": 246.755,
+        "range": [
+          246.15,
+          247.36
+        ]
+      },
+      "host_time_change_percent": -21.70112170588142
+    },
+    "v1_t12_k4096_m1536_n1_batch1_pad0": {
+      "work": {
+        "samples": [
+          227.01,
+          226.6
+        ],
+        "median": 226.805,
+        "range": [
+          226.6,
+          227.01
+        ]
+      },
+      "public": {
+        "samples": [
+          128.86,
+          129.91
+        ],
+        "median": 129.385,
+        "range": [
+          128.86,
+          129.91
+        ]
+      },
+      "host_time_change_percent": -42.953197680827145
+    },
+    "v1_t12_k12288_m1536_n1_batch1_pad0": {
+      "work": {
+        "samples": [
+          692.4,
+          690.8
+        ],
+        "median": 691.5999999999999,
+        "range": [
+          690.8,
+          692.4
+        ]
+      },
+      "public": {
+        "samples": [
+          313.77,
+          315.29
+        ],
+        "median": 314.53,
+        "range": [
+          313.77,
+          315.29
+        ]
+      },
+      "host_time_change_percent": -54.521399652978594
+    }
+  },
+  "correctness": {
+    "work-general": {
+      "passed": 29,
+      "unsupported": 0
+    },
+    "work-view-add": {
+      "passed": 16,
+      "unsupported": 0
+    },
+    "public-small-final": {
+      "passed": 39,
+      "unsupported": 3
+    },
+    "public-general-final": {
+      "passed": 29,
+      "unsupported": 0
+    },
+    "public-view-add-final": {
+      "passed": 40,
+      "unsupported": 0
+    },
+    "public-off-small": {
+      "passed": 39,
+      "unsupported": 3
+    },
+    "public-wide-off-small": {
+      "passed": 39,
+      "unsupported": 3
+    },
+    "public-dump": {
+      "passed": 16,
+      "unsupported": 0
+    }
+  },
+  "initial_failures": {
+    "public-small-first": 1,
+    "public-view-add": 134,
+    "public-unaligned-off-proof": 134
+  },
+  "limitations": "K20c only measured; GK110B/GK210 trial targets; three strided quant inputs skipped; arbitrary descriptor-misaligned views unsupported; full-profile/long-context/MoE not measured"
+}
