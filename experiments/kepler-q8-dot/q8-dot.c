@@ -72,7 +72,7 @@ static uint32_t *read_spirv(const char *path, size_t *size_out) {
 
 int main(int argc, char **argv) {
     if (argc != 7) {
-        fprintf(stderr, "usage: %s shader.spv mode(0..4) K M iterations repeats\n", argv[0]);
+        fprintf(stderr, "usage: %s shader.spv mode(0..6) K M iterations repeats\n", argv[0]);
         return 2;
     }
     const uint32_t mode = (uint32_t) strtoul(argv[2], NULL, 0);
@@ -81,7 +81,7 @@ int main(int argc, char **argv) {
     const uint32_t m = (uint32_t) strtoul(argv[4], NULL, 0);
     const uint32_t iterations = (uint32_t) strtoul(argv[5], NULL, 0);
     const uint32_t repeats = (uint32_t) strtoul(argv[6], NULL, 0);
-    if (mode > 4 || (k != 1024 && k != 2048 && k != 8192) || !m || m > 8192 ||
+    if (mode > 6 || (k != 1024 && k != 2048 && k != 8192) || !m || m > 8192 ||
         !iterations || iterations > 100 || !repeats || repeats > 10) return 2;
     const char *rows_env = getenv("KEPLER_TEST_ROWS");
     const uint32_t rows = rows_env ? (uint32_t) strtoul(rows_env, NULL, 0) : 1;
