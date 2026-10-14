@@ -2919,6 +2919,11 @@ void ggml_vk_load_shaders(vk_device& device, vk_pipeline requested) {
                                 arr_dmmv_q8_0_f32_f32_len[reduction], arr_dmmv_q8_0_f32_f32_data[reduction], "main",
                                 mul_mat_vec_num_bindings, sizeof(vk_mat_vec_push_constants), {2, 1, 1},
                                 {subgroup_size * 4, 2, 1, 3}, 1, true, use_subgroups, force_subgroup_size);
+        ggml_vk_create_pipeline(device, device->pipeline_kepler_ffn_q8_wide_down, "mul_mat_vec_kepler_q8_0_wide_down_rows2",
+                                use_subgroups ? mul_mat_vec_kepler_q8_0_wide_f32_f32_subgroup_len : mul_mat_vec_kepler_q8_0_wide_f32_f32_len,
+                                use_subgroups ? mul_mat_vec_kepler_q8_0_wide_f32_f32_subgroup_data : mul_mat_vec_kepler_q8_0_wide_f32_f32_data, "main",
+                                mul_mat_vec_num_bindings, sizeof(vk_mat_vec_push_constants), {2, 1, 1},
+                                {subgroup_size * 4, 2, 1, 6}, 1, true, use_subgroups, force_subgroup_size);
     }
 
     for (uint32_t w = 0; w < DMMV_WG_SIZE_COUNT; ++w) {
@@ -6727,7 +6732,7 @@ static void ggml_vk_mul_mat_vec_q_f16(ggml_backend_vk_context * ctx, vk_context&
         ((ne00 == 2048 && ne20 == 8192) || (ne00 == 8192 && ne20 == 2048)) &&
         ggml_is_contiguous(src0) && ggml_is_contiguous(src1) && ggml_is_contiguous(dst) &&
         reinterpret_cast<uintptr_t>(src0->data) % 8 == 0 && reinterpret_cast<uintptr_t>(src1->data) % 16 == 0) {
-        dmmv = ctx->device->pipeline_kepler_ffn_q8_dot4;
+        dmmv = ne00 == 8192 ? ctx->device->pipeline_kepler_ffn_q8_wide_down : ctx->device->pipeline_kepler_ffn_q8_dot4;
     }
 
     if (quantize_y) {
