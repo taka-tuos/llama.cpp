@@ -35,7 +35,7 @@ Choose the Vulkan device reported for the intended GPU. Do not assume Vulkan0 or
 | Q4_0 / Q4_K, K >= 1024 | WG64 for K <= 4096, WG128 for longer K |
 | Q4_0, 1024 <= K <= 4096 and M > K | Four rows; contracting shapes retain two |
 
-K is the input width, M the output width. Dedicated shaders require a contiguous single vector and single batch, F32 activation, weight alignment of 8 bytes and activation alignment of 16 bytes. F16 requires K divisible by 4; Q8_0 and Q4_0 require valid complete quant blocks. Partial output rows are supported. Descriptor sizes and element indices must fit the existing 32-bit path. Unsupported layouts, sizes, N > 1 and batches use the existing paths; a WG hint may still apply to an upstream matvec path.
+K is the input width, M the output width. Dedicated shaders require a contiguous single vector and single batch, F32 activation, weight alignment of 8 bytes and activation alignment of 16 bytes. F16 requires K divisible by 4; Q8_0 and Q4_0 require valid complete quant blocks. Partial output rows are supported. Views must also satisfy the upstream Vulkan descriptor-offset alignment; arbitrary byte offsets are unsupported in this source snapshot. Descriptor sizes and element indices must fit the existing 32-bit path. Unsupported layouts, sizes, N > 1 and batches use the existing paths; a WG hint may still apply to an upstream matvec path.
 
 These shape rules are initial performance heuristics, not a promise that every model or shape gets faster. The original exact SmolLM2 FFN guards have been replaced with these layout and size conditions. Small M, tails, other model layouts and different memory/clock configurations may change the result. MoE MUL_MAT_ID has no dedicated new tuning.
 

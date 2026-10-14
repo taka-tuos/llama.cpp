@@ -1,5 +1,7 @@
 # llama.cpp
 
+This fork prepares Kepler Vulkan decode tuning for NVK GK110/GK110B/GK210. K20c is tested; other cards are trial targets. See [Kepler build, scope and smoke comparison](docs/backend/kepler.md).
+
 ![llama](https://raw.githubusercontent.com/ggml-org/llama.brand/refs/heads/master/cover/llama-cpp/cover-llama-cpp-dark.svg)
 
 <div align="center">

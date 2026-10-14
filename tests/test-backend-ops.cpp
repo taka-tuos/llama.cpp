@@ -5333,16 +5333,15 @@ struct test_mul_mat : public test_case {
 struct test_kepler_matvec_check : public test_mul_mat {
     const bool offset_view;
     const bool add_bias;
-    const bool unaligned;
-    test_kepler_matvec_check(ggml_type type, int64_t rows, int64_t cols, bool offset, bool bias, bool unaligned = false)
+    test_kepler_matvec_check(ggml_type type, int64_t rows, int64_t cols, bool offset, bool bias)
         : test_mul_mat(type, GGML_TYPE_F32, rows, 1, cols, {1, 1}, {1, 1}),
-          offset_view(offset), add_bias(bias), unaligned(unaligned) {}
+          offset_view(offset), add_bias(bias) {}
     std::string vars() override {
-        return test_mul_mat::vars() + ",offset_view=" + std::to_string(offset_view) + ",add_bias=" + std::to_string(add_bias) + ",unaligned=" + std::to_string(unaligned);
+        return test_mul_mat::vars() + ",offset_view=" + std::to_string(offset_view) + ",add_bias=" + std::to_string(add_bias);
     }
     ggml_tensor * build_graph(ggml_context * ctx) override {
         const int64_t prefix_a = offset_view ? 256 : 0;
-        const int64_t prefix_b = offset_view ? (unaligned ? 5 : 4) : 0;
+        const int64_t prefix_b = offset_view ? 4 : 0;
         ggml_tensor * parent_a = ggml_new_tensor_1d(ctx, type_a, k*m + prefix_a);
         ggml_tensor * parent_b = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, k + prefix_b);
         ggml_set_name(parent_a, "initialized_parent_a");
@@ -9684,9 +9683,6 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
         for (const auto shape : {std::array<int64_t, 2>{8192, 2048}, std::array<int64_t, 2>{2048, 8192}, std::array<int64_t, 2>{33, 1536}, std::array<int64_t, 2>{5, 256}, std::array<int64_t, 2>{33, 4096}}) {
             test_cases.emplace_back(new test_kepler_matvec_check(type, shape[0], shape[1], true, false));
             test_cases.emplace_back(new test_kepler_matvec_check(type, shape[0], shape[1], false, true));
-            if (shape[0] == 33 && shape[1] == 1536) {
-                test_cases.emplace_back(new test_kepler_matvec_check(type, shape[0], shape[1], true, false, true));
-            }
         }
     }
 
